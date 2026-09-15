@@ -2,6 +2,9 @@
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
+        <Product>freedom</Product>
+        <AssemblyTitle>freedom maintenance helper</AssemblyTitle>
+        <Description>freedom update and recovery helper</Description>
 	</PropertyGroup>
 
 	<ItemGroup>

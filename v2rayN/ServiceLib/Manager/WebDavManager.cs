@@ -10,7 +10,7 @@ public sealed class WebDavManager
     private readonly Config? _config;
     private WebDavClient? _client;
     private string? _lastDescription;
-    private string _webDir = Global.AppName + "_backup";
+    private string _webDir = Global.LegacyAppName + "_backup";
     private readonly string _webFileName = "backup.zip";
     private readonly string _tag = "WebDav--";
 
@@ -36,7 +36,8 @@ public sealed class WebDavManager
             }
             if (_config.WebDavItem.DirName.IsNullOrEmpty())
             {
-                _webDir = Global.AppName + "_backup";
+                // Keep existing remote backups discoverable after the product rename.
+                _webDir = Global.LegacyAppName + "_backup";
             }
             else
             {

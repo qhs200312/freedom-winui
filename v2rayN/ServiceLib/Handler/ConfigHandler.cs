@@ -9,6 +9,17 @@ public static class ConfigHandler
 
     #region ConfigHandler
 
+    public static void ApplyPrivacyDefaults(Config config)
+    {
+        config.GuiItem ??= new();
+        if (config.PrivacyDefaultsVersion >= 1)
+        {
+            return;
+        }
+        config.GuiItem.ProxyStunTraffic = true;
+        config.PrivacyDefaultsVersion = 1;
+    }
+
     /// <summary>
     /// Load the application configuration file
     /// If the file exists, deserialize it from JSON
@@ -95,6 +106,7 @@ public static class ConfigHandler
             EnableLegacyProtect = false,
         };
         config.GuiItem ??= new();
+        ApplyPrivacyDefaults(config);
         if (!Global.RootCertProviders.Contains(config.GuiItem.RootCertProvider))
         {
             config.GuiItem.RootCertProvider = Global.RootCertProviders.First();
@@ -1601,10 +1613,11 @@ public static class ConfigHandler
         {
             arrData = arrData.Distinct();
         }
-        foreach (var str in arrData)
+        foreach (var line in arrData)
         {
+            var str = line.Trim();
             //maybe sub
-            if (!isSub && (str.StartsWith(Global.HttpsProtocol) || str.StartsWith(Global.HttpProtocol)))
+            if (!isSub && ClipboardSubscriptionImport.IsSubscriptionUrl(str))
             {
                 if (await AddSubItem(config, str) == 0)
                 {
@@ -1998,7 +2011,7 @@ public static class ConfigHandler
             return -1;
         }
         //Do not allow http protocol
-        if (url.StartsWith(Global.HttpProtocol) && !Utils.IsPrivateNetwork(uri.IdnHost))
+        if (uri.Scheme == Uri.UriSchemeHttp && !Utils.IsPrivateNetwork(uri.IdnHost))
         {
             //TODO Temporary reminder to be removed later
             NoticeManager.Instance.Enqueue(ResUI.InsecureUrlProtocol);

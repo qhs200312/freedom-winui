@@ -4,6 +4,7 @@ param(
     [ValidateSet('win-x64')]
     [string]$RuntimeIdentifier = 'win-x64',
     [string]$CoreArchive,
+    [string]$UdpCacheDirectory = (Join-Path $PSScriptRoot '..\artifacts\udp-cache'),
     [string]$IsccPath
 )
 
@@ -48,7 +49,7 @@ New-Item -ItemType Directory -Path $publishDir, $updaterDir, $coreExtractDir, $p
 
 & dotnet publish (Join-Path $sourceRoot 'v2rayN.WinUI\v2rayN.WinUI.csproj') `
     -c Release -r $RuntimeIdentifier --self-contained true `
-    -p:Version=$Version -p:PublishSingleFile=false -warnaserror -o $publishDir
+    -p:Platform=x64 -p:Version=$Version -p:PublishSingleFile=false -warnaserror -o $publishDir
 if ($LASTEXITCODE -ne 0) {
     throw 'WinUI publish failed.'
 }
@@ -116,12 +117,12 @@ if ($needsMihomoCompatibleName) {
 }
 
 $requiredFiles = @(
-    'v2rayN.exe',
-    'v2rayN.pri',
+    'freedom.exe',
+    'freedom.pri',
     'App.xbf',
     'MainWindow.xbf',
     'Views\UpdateManagerView.xbf',
-    'Assets\v2rayN.ico',
+    'Assets\freedom.ico',
     'AmazTool.exe',
     'bin\xray\xray.exe',
     'bin\xray\wintun.dll',
@@ -130,11 +131,20 @@ $requiredFiles = @(
     'bin\geoip.dat',
     'bin\geosite.dat'
 )
+& (Join-Path $PSScriptRoot 'prepare-udp-components.ps1') -PackageDirectory $packageDir -CacheDirectory $UdpCacheDirectory
+$requiredFiles += @(
+    'bin\proxifyre\ProxiFyre.exe',
+    'bin\proxifyre\.freedom-managed',
+    'prerequisites\Windows.Packet.Filter.3.6.2.1.x64.msi',
+    'prerequisites\VC_redist.x64.exe'
+)
 foreach ($relativePath in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $packageDir $relativePath) -PathType Leaf)) {
         throw "Installer dependency is missing: $relativePath"
     }
 }
+
+& (Join-Path $PSScriptRoot 'validate-package.ps1') -PackageDirectory $packageDir
 
 Get-ChildItem $packageDir -Recurse -File | Where-Object {
     $_.Name -match '^(cache\.db|.*\.db-(shm|wal))$'
@@ -160,7 +170,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Installer compilation failed.'
 }
 
-$setupPath = Join-Path $outputDir 'v2rayN-windows-64-setup.exe'
+$setupPath = Join-Path $outputDir 'freedom-windows-64-setup.exe'
 if (-not (Test-Path -LiteralPath $setupPath -PathType Leaf)) {
     throw "Installer output not found: $setupPath"
 }

@@ -759,6 +759,35 @@ public class ProfilesViewModel : MyReactiveObject
         _speedtestService?.ExitLoop();
     }
 
+    public async Task<int?> TestServerLatencyAsync(string? indexId)
+    {
+        if (indexId.IsNullOrEmpty() || !Enum.IsDefined(AppManager.Instance.RunningCoreType))
+        {
+            return null;
+        }
+
+        var item = await AppManager.Instance.GetProfileItem(indexId);
+        if (item is null)
+        {
+            return null;
+        }
+
+        var port = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
+        var proxy = new WebProxy($"socks5://{Global.Loopback}:{port}");
+        var delay = await ConnectionHandler.GetRealPingTime(proxy);
+        ProfileExManager.Instance.SetTestDelay(item.IndexId, delay);
+        await ProfileExManager.Instance.SaveTo();
+
+        var model = ProfileItems.FirstOrDefault(profile => profile.IndexId == item.IndexId);
+        if (model is not null)
+        {
+            model.Delay = delay;
+            model.DelayVal = delay.ToString();
+        }
+
+        return delay;
+    }
+
     private async Task Export2ClientConfigAsync(bool blClipboard)
     {
         var item = await AppManager.Instance.GetProfileItem(SelectedProfile.IndexId);

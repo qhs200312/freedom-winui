@@ -44,11 +44,14 @@ public static class AutoStartupHandler
     [SupportedOSPlatform("windows")]
     private static async Task ClearTaskWindows()
     {
-        var autoRunName = GetAutoRunNameWindows();
-        WindowsUtils.RegWriteValue(Global.AutoRunRegPath, autoRunName, "");
-        if (Utils.IsAdministrator())
+        foreach (var prefix in new[] { Global.AutoRunName, Global.LegacyAutoRunName })
         {
-            AutoStartTaskService(autoRunName, "", "");
+            var autoRunName = $"{prefix}_{Utils.GetMd5(Utils.StartupPath())}";
+            WindowsUtils.RegWriteValue(Global.AutoRunRegPath, autoRunName, "");
+            if (Utils.IsAdministrator())
+            {
+                AutoStartTaskService(autoRunName, "", "");
+            }
         }
 
         await Task.CompletedTask;
@@ -94,7 +97,7 @@ public static class AutoStartupHandler
 
         var logonUser = WindowsIdentity.GetCurrent().Name;
         using var taskService = new Microsoft.Win32.TaskScheduler.TaskService();
-        var tasks = taskService.RootFolder.GetTasks(new Regex(taskName));
+        var tasks = taskService.RootFolder.GetTasks(new Regex($"^{Regex.Escape(taskName)}$"));
         if (fileName.IsNullOrEmpty())
         {
             foreach (var t in tasks)

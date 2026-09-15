@@ -38,8 +38,12 @@ public class DownloadServiceTests
         var coreInfo = CoreInfoManager.Instance.GetCoreInfo(ECoreType.v2rayN);
 
         coreInfo.Should().NotBeNull();
-        coreInfo!.Url.Should().Be("https://github.com/qhs200312/v2rayN/releases");
-        coreInfo.ReleaseApiUrl.Should().Be("https://api.github.com/repos/qhs200312/v2rayN/releases");
+        coreInfo!.Url.Should().Be("https://github.com/qhs200312/freedom-winui/releases");
+        coreInfo.ReleaseApiUrl.Should().Be("https://api.github.com/repos/qhs200312/freedom-winui/releases");
+        coreInfo.DownloadUrlWin64.Should().EndWith("/freedom-windows-64.zip");
+        coreInfo.DownloadUrlWinArm64.Should().EndWith("/freedom-windows-arm64.zip");
+        string.Format(coreInfo.DownloadUrlWin64!, new SemanticVersion("v7.23.9"))
+            .Should().Be("https://github.com/qhs200312/freedom-winui/releases/download/v7.23.9/freedom-windows-64.zip");
     }
 
     private sealed class TestProxy(Uri proxyUri, bool isBypassed) : IWebProxy

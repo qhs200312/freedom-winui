@@ -2,6 +2,8 @@
   "solution": {
     "path": "v2rayN.sln",
     "projects": [
+      "AmazTool\\AmazTool.csproj",
+      "ServiceLib.Tests\\ServiceLib.Tests.csproj",
       "ServiceLib.UdpTest\\ServiceLib.UdpTest.csproj",
       "ServiceLib\\ServiceLib.csproj",
       "v2rayN.WinUI\\v2rayN.WinUI.csproj"

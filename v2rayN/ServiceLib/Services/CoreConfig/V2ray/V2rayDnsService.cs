@@ -234,6 +234,11 @@ public partial class CoreConfigV2rayService
 
         var directDnsTagIndex = 1;
 
+        if (_config.GuiItem.ProxyStunTraffic)
+        {
+            AddDnsServers(remoteDNSAddress, WebRtcRoutingPolicy.Domains.Select(domain => $"full:{domain}").ToList());
+        }
+
         AddDnsServers(remoteDNSAddress, proxyDomainList);
         AddDnsServers(directDNSAddress, directDomainList, true);
         AddDnsServers(remoteDNSAddress, proxyGeositeList);

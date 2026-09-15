@@ -134,14 +134,15 @@ public static class ConnectionHandler
 
             var ip = ipInfo.ip ?? ipInfo.clientIp ?? ipInfo.ip_addr ?? ipInfo.query;
             var countryValue = ipInfo.country;
+            var isCountryCode = countryValue is { Length: 2 } && countryValue.All(char.IsAsciiLetter);
             var country = ipInfo.country_code
                           ?? ipInfo.countryCode
                           ?? ipInfo.location?.country_code
-                          ?? (countryValue?.Length == 2 ? countryValue : null)
+                          ?? (isCountryCode ? countryValue : null)
                           ?? "unknown";
             var countryName = ipInfo.country_name
                               ?? ipInfo.location?.country
-                              ?? (countryValue?.Length > 2 ? countryValue : null);
+                              ?? (!isCountryCode ? countryValue : null);
             var region = ipInfo.region ?? ipInfo.region_name ?? ipInfo.regionName ?? ipInfo.location?.state;
             var city = ipInfo.city ?? ipInfo.location?.city;
             var organization = ipInfo.org ?? ipInfo.isp ?? ipInfo.organization;

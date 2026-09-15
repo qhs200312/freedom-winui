@@ -36,6 +36,27 @@ public partial class CoreConfigV2rayService
             {
                 _coreConfig.routing.domainStrategy = _config.RoutingBasicItem.DomainStrategy;
 
+                if (_config.GuiItem.ProxyStunTraffic)
+                {
+                    // Restrict IP-based matching to resolved STUN servers. A port
+                    // alone must not change routing for games or local traffic.
+                    var addresses = WebRtcRoutingPolicy.FilterAddresses(context.StunServerAddresses);
+                    if (addresses.Count > 0)
+                    {
+                        _coreConfig.routing.rules.Add(new()
+                        {
+                            type = "field", network = "udp", port = WebRtcRoutingPolicy.Ports,
+                            ip = addresses, outboundTag = Global.ProxyTag
+                        });
+                    }
+                    _coreConfig.routing.rules.Add(new()
+                    {
+                        type = "field", network = "udp",
+                        domain = WebRtcRoutingPolicy.Domains.Select(domain => $"full:{domain}").ToList(),
+                        outboundTag = Global.ProxyTag
+                    });
+                }
+
                 var routing = context.RoutingItem;
                 if (routing != null)
                 {

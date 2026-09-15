@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ServiceLib\ServiceLib.csproj" />
+    <Compile Include="..\AmazTool\UpdateArchiveInstaller.cs" Link="Update\UpdateArchiveInstaller.cs" />
   </ItemGroup>
 
 </Project>

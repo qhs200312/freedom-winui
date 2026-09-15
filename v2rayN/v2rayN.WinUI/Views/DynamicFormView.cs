@@ -35,6 +35,7 @@ public sealed class DynamicFormView : UserControl
         ["TLS 与安全"] = 40,
         ["性能与测试"] = 50,
         ["系统代理"] = 60,
+        ["隐私保护"] = 65,
         ["TUN 模式"] = 70,
         ["界面与行为"] = 80,
         ["更新与数据源"] = 90,
@@ -42,8 +43,11 @@ public sealed class DynamicFormView : UserControl
         ["高级选项"] = 110
     };
 
-    public DynamicFormView(object viewModel, bool includeCommands = true)
+    private readonly bool _collapseSections;
+
+    public DynamicFormView(object viewModel, bool includeCommands = true, bool collapseSections = false)
     {
+        _collapseSections = collapseSections;
         DataContext = viewModel;
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -60,7 +64,7 @@ public sealed class DynamicFormView : UserControl
             Padding = new Thickness(4, 8, 16, 24),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        AddObjectFields(formPanel, viewModel, null, 0);
+        AddObjectFields(formPanel, viewModel, null, 0, _collapseSections);
 
         var scrollViewer = new ScrollViewer
         {
@@ -73,8 +77,6 @@ public sealed class DynamicFormView : UserControl
         root.Children.Add(scrollViewer);
         Content = root;
 
-        scrollViewer.Loaded += (_, _) => scrollViewer.Focus(FocusState.Programmatic);
-        scrollViewer.PointerEntered += (_, _) => scrollViewer.Focus(FocusState.Pointer);
         if (viewModel is OptionSettingViewModel settings)
         {
             EnableAutoSave(settings, scrollViewer);
@@ -133,7 +135,7 @@ public sealed class DynamicFormView : UserControl
         var bar = new CommandBar
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
-            IsOpen = true,
+            IsOpen = false,
             IsDynamicOverflowEnabled = false,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
@@ -159,7 +161,7 @@ public sealed class DynamicFormView : UserControl
         return bar;
     }
 
-    private static void AddObjectFields(StackPanel panel, object source, string? heading, int depth)
+    private static void AddObjectFields(StackPanel panel, object source, string? heading, int depth, bool collapseSections)
     {
         if (heading is not null)
         {
@@ -192,7 +194,7 @@ public sealed class DynamicFormView : UserControl
                     && server.SelectedSource.StreamSecurity == Global.StreamSecurity)
                 {
                     fields.Add(new FormField(
-                        BuildCertificatePinningField(server),
+                        () => BuildCertificatePinningField(server),
                         GetFieldMetadata(nameof(AddServerViewModel.Cert), true, order++)));
                 }
                 continue;
@@ -202,7 +204,7 @@ public sealed class DynamicFormView : UserControl
             if (typeof(IList<string>).IsAssignableFrom(property.PropertyType))
             {
                 var metadata = GetFieldMetadata(property.Name, true, order++);
-                fields.Add(new FormField(BuildStringListField(source, property), metadata));
+                fields.Add(new FormField(() => BuildStringListField(source, property), metadata));
                 continue;
             }
             if (typeof(ICommand).IsAssignableFrom(propertyType) || typeof(IEnumerable).IsAssignableFrom(propertyType) && propertyType != typeof(string))
@@ -212,7 +214,7 @@ public sealed class DynamicFormView : UserControl
             if (IsScalar(propertyType))
             {
                 var metadata = GetFieldMetadata(property.Name, IsFullWidth(property.Name), order++);
-                fields.Add(new FormField(BuildField(source, property, propertyType, Nullable.GetUnderlyingType(property.PropertyType) is not null), metadata));
+                fields.Add(new FormField(() => BuildField(source, property, propertyType, Nullable.GetUnderlyingType(property.PropertyType) is not null), metadata));
                 continue;
             }
             if (depth < 1 && property.GetValue(source) is { } nested)
@@ -223,28 +225,46 @@ public sealed class DynamicFormView : UserControl
 
         foreach (var nested in nestedObjects.Where(item => item.Name == "SelectedSource"))
         {
-            AddObjectFields(panel, nested.Value, null, depth + 1);
+            AddObjectFields(panel, nested.Value, null, depth + 1, collapseSections);
         }
 
         foreach (var section in fields
                      .GroupBy(field => field.Metadata.Section)
                      .OrderBy(group => SectionOrder.GetValueOrDefault(group.Key, int.MaxValue)))
         {
-            panel.Children.Add(BuildSection(section.Key, section.OrderBy(field => field.Metadata.Order).ToList()));
+            panel.Children.Add(BuildSection(
+                section.Key,
+                section.OrderBy(field => field.Metadata.Order).ToList(),
+                !collapseSections));
         }
 
         foreach (var nested in nestedObjects.Where(item => item.Name != "SelectedSource"))
         {
             var nestedPanel = new StackPanel { Spacing = 16, HorizontalAlignment = HorizontalAlignment.Stretch };
-            AddObjectFields(nestedPanel, nested.Value, null, depth + 1);
-            panel.Children.Add(new Expander
+            var expander = new Expander
             {
                 Header = PropertyLabels.GetValueOrDefault(nested.Name, Humanize(nested.Name)),
-                IsExpanded = true,
+                IsExpanded = !collapseSections,
                 Content = nestedPanel,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch
-            });
+            };
+            var populated = false;
+            void PopulateNested()
+            {
+                if (populated)
+                {
+                    return;
+                }
+                populated = true;
+                AddObjectFields(nestedPanel, nested.Value, null, depth + 1, collapseSections);
+            }
+            expander.Expanding += (_, _) => PopulateNested();
+            if (!collapseSections)
+            {
+                PopulateNested();
+            }
+            panel.Children.Add(expander);
         }
     }
 
@@ -265,7 +285,7 @@ public sealed class DynamicFormView : UserControl
         var actions = new CommandBar
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
-            IsOpen = true,
+            IsOpen = false,
             IsDynamicOverflowEnabled = false,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             Padding = new Thickness(0)
@@ -338,7 +358,7 @@ public sealed class DynamicFormView : UserControl
         };
     }
 
-    private static Expander BuildSection(string title, IReadOnlyList<FormField> fields)
+    private static Expander BuildSection(string title, IReadOnlyList<FormField> fields, bool isExpanded)
     {
         var grid = new Grid
         {
@@ -346,14 +366,14 @@ public sealed class DynamicFormView : UserControl
             RowSpacing = 12,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        foreach (var field in fields)
-        {
-            grid.Children.Add(field.Editor);
-        }
-
+        var populated = false;
         var isWide = false;
         void UpdateLayout(double width)
         {
+            if (!populated)
+            {
+                return;
+            }
             var nextIsWide = width >= TwoColumnBreakpoint;
             if (grid.ColumnDefinitions.Count > 0 && nextIsWide == isWide)
             {
@@ -366,16 +386,34 @@ public sealed class DynamicFormView : UserControl
 
         grid.Loaded += (_, _) => UpdateLayout(grid.ActualWidth);
         grid.SizeChanged += (_, args) => UpdateLayout(args.NewSize.Width);
-        ArrangeFields(grid, fields, false);
+        void Populate()
+        {
+            if (populated)
+            {
+                return;
+            }
+            populated = true;
+            foreach (var field in fields)
+            {
+                grid.Children.Add(field.Editor);
+            }
+            UpdateLayout(grid.ActualWidth);
+        }
 
-        return new Expander
+        var expander = new Expander
         {
             Header = new TextBlock { Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
-            IsExpanded = true,
+            IsExpanded = isExpanded,
             Content = grid,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
+        expander.Expanding += (_, _) => Populate();
+        if (isExpanded)
+        {
+            Populate();
+        }
+        return expander;
     }
 
     private static void ArrangeFields(Grid grid, IReadOnlyList<FormField> fields, bool twoColumns)
@@ -552,6 +590,30 @@ public sealed class DynamicFormView : UserControl
             return combo;
         }
 
+        if (property.Name == "CurrentFontFamily")
+        {
+            var combo = new ComboBox
+            {
+                Header = label,
+                IsEditable = true,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            combo.SetBinding(ComboBox.TextProperty, binding);
+
+            var fontsLoaded = false;
+            combo.DropDownOpened += async (_, _) =>
+            {
+                if (fontsLoaded)
+                {
+                    return;
+                }
+
+                fontsLoaded = true;
+                combo.ItemsSource = await Task.Run(() => InstalledFonts.Value);
+            };
+            return combo;
+        }
+
         var definition = GetSettingChoices(property.Name);
         if (definition is null)
         {
@@ -585,7 +647,6 @@ public sealed class DynamicFormView : UserControl
             "DefUserAgent" => new(Global.UserAgent.Prepend(string.Empty).Distinct().ToList(), false),
             "Mux4SboxProtocol" => new(Global.SingboxMuxs, false),
             "FragmentPackets" => new(Global.FragmentPacketsOptions, false),
-            "CurrentFontFamily" => new(InstalledFonts.Value, true),
             "SpeedTestTimeout" => new(Enumerable.Range(2, 5).Select(value => value * 5).ToList(), false),
             "MixedConcurrencyCount" => new(Enumerable.Range(2, 7).ToList(), false),
             "SpeedTestUrl" => new(Global.SpeedTestUrls, true),
@@ -623,6 +684,7 @@ public sealed class DynamicFormView : UserControl
     {
         var section = name switch
         {
+            "ProxyStunTraffic" or "EnableUdpInterception" or "UdpInterceptionApplications" => "隐私保护",
             _ when name.StartsWith("Tun", StringComparison.OrdinalIgnoreCase) => "TUN 模式",
             _ when name.Contains("SystemProxy", StringComparison.OrdinalIgnoreCase) || name.StartsWith("NotProxy", StringComparison.OrdinalIgnoreCase) => "系统代理",
             _ when name.StartsWith("CoreType", StringComparison.OrdinalIgnoreCase) => "核心选择",
@@ -780,7 +842,7 @@ public sealed class DynamicFormView : UserControl
         return name.Contains("Json", StringComparison.OrdinalIgnoreCase) ||
         name.Contains("Content", StringComparison.OrdinalIgnoreCase) ||
         name.Contains("Template", StringComparison.OrdinalIgnoreCase) ||
-        name is "Hosts" or "Domain" or "IP" or "Process" or "SystemProxyExceptions" or "TunRouteExcludeAddress";
+        name is "Hosts" or "Domain" or "IP" or "Process" or "SystemProxyExceptions" or "TunRouteExcludeAddress" or "UdpInterceptionApplications";
     }
 
     private static Symbol GetCommandSymbol(string name)
@@ -839,7 +901,11 @@ public sealed class DynamicFormView : UserControl
     }
 
     private sealed record FieldMetadata(string Section, int Order, bool FullWidth);
-    private sealed record FormField(FrameworkElement Editor, FieldMetadata Metadata);
+    private sealed record FormField(Func<FrameworkElement> CreateEditor, FieldMetadata Metadata)
+    {
+        private FrameworkElement? _editor;
+        public FrameworkElement Editor => _editor ??= CreateEditor();
+    }
     private sealed record ChoiceDefinition(IEnumerable Items, bool Editable);
 
     private static readonly Dictionary<string, string> CommandLabels = new()
@@ -854,6 +920,9 @@ public sealed class DynamicFormView : UserControl
 
     private static readonly Dictionary<string, string> PropertyLabels = new()
     {
+        ["ProxyStunTraffic"] = "STUN 服务器优先走代理",
+        ["EnableUdpInterception"] = "普通代理 UDP 接管（实验性，需要驱动）",
+        ["UdpInterceptionApplications"] = "UDP 接管进程名（分号或换行分隔）",
         ["SelectedSource"] = "配置内容", ["Remarks"] = "备注", ["Address"] = "服务器地址", ["Port"] = "端口",
         ["Id"] = "用户 ID", ["Password"] = "密码", ["Security"] = "加密方式", ["Network"] = "传输协议",
         ["StreamSecurity"] = "传输层安全", ["Sni"] = "服务器名称 SNI", ["Alpn"] = "ALPN", ["Fingerprint"] = "指纹",

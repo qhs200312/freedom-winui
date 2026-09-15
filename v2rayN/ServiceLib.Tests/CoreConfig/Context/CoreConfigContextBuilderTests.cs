@@ -10,6 +10,84 @@ namespace ServiceLib.Tests.CoreConfig.Context;
 
 public class CoreConfigContextBuilderTests
 {
+    [Theory]
+    [InlineData(false, false, false, true)]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, true, true, true)]
+    [InlineData(true, false, false, false)]
+    public async Task BuildAll_ShouldPreserveRuntimeStatisticsRequirement(
+        bool tun, bool legacyProtect, bool strictRoute, bool forceRealtimeSpeed)
+    {
+        var config = CoreConfigTestFactory.CreateConfig();
+        config.ForceRealtimeSpeed = forceRealtimeSpeed;
+        config.TunModeItem.EnableTun = tun;
+        config.TunModeItem.EnableLegacyProtect = legacyProtect;
+        config.TunModeItem.StrictRoute = strictRoute;
+        CoreConfigTestFactory.BindAppManagerConfig(config);
+        SQLiteHelper.Instance.CreateTable<FullConfigTemplateItem>();
+        SQLiteHelper.Instance.CreateTable<DNSItem>();
+        SQLiteHelper.Instance.CreateTable<RoutingItem>();
+        SQLiteHelper.Instance.CreateTable<ProfileItem>();
+        SQLiteHelper.Instance.CreateTable<SubItem>();
+        var node = CoreConfigTestFactory.CreateVmessNode(ECoreType.Xray, string.Empty);
+
+        var result = await CoreConfigContextBuilder.BuildAll(config, node);
+
+        result.Success.Should().BeTrue();
+        result.MainResult.Context.AppConfig.ForceRealtimeSpeed.Should().Be(forceRealtimeSpeed);
+        if (result.PreSocksResult is { } pre)
+        {
+            pre.Context.AppConfig.ForceRealtimeSpeed.Should().Be(forceRealtimeSpeed);
+        }
+
+        var generated = new CoreConfigV2rayService(result.MainResult.Context).GenerateClientConfigContent();
+        generated.Success.Should().BeTrue();
+        var coreConfig = JsonUtils.Deserialize<V2rayConfig>(generated.Data!.ToString())!;
+        coreConfig.inbounds.Any(inbound => inbound.protocol == "tun").Should().Be(tun && !legacyProtect);
+        result.MainResult.Context.AppConfig.GuiItem.EnableStatistics.Should().BeFalse();
+        result.MainResult.Context.AppConfig.GuiItem.DisplayRealTimeSpeed.Should().BeFalse();
+        if (forceRealtimeSpeed)
+        {
+            coreConfig.metrics.Should().NotBeNull();
+            coreConfig.metrics.listen.Should().NotBeNullOrEmpty();
+            coreConfig.policy.system.statsOutboundUplink.Should().BeTrue();
+            coreConfig.policy.system.statsOutboundDownlink.Should().BeTrue();
+        }
+        else
+        {
+            coreConfig.metrics.Should().BeNull();
+        }
+
+        JsonUtils.Serialize(config).ToLowerInvariant().Should().NotContain("forcerealtimespeed");
+    }
+
+    [Theory]
+    [InlineData("invalid-interface-or-host", null)]
+    [InlineData(null, "nonexistent-test-interface")]
+    public async Task Build_NormalizedNetworkOptions_ShouldPreserveRuntimeStatistics(
+        string? sendThrough, string? bindInterface)
+    {
+        var config = CoreConfigTestFactory.CreateConfig();
+        config.ForceRealtimeSpeed = true;
+        config.CoreBasicItem.SendThrough = sendThrough;
+        config.CoreBasicItem.BindInterface = bindInterface;
+        CoreConfigTestFactory.BindAppManagerConfig(config);
+        SQLiteHelper.Instance.CreateTable<FullConfigTemplateItem>();
+        SQLiteHelper.Instance.CreateTable<DNSItem>();
+        SQLiteHelper.Instance.CreateTable<RoutingItem>();
+        SQLiteHelper.Instance.CreateTable<ProfileItem>();
+        SQLiteHelper.Instance.CreateTable<SubItem>();
+
+        var result = await CoreConfigContextBuilder.Build(
+            config, CoreConfigTestFactory.CreateVmessNode(ECoreType.Xray, string.Empty));
+
+        result.Success.Should().BeTrue();
+        result.Context.AppConfig.Should().NotBeSameAs(config);
+        result.Context.AppConfig.ForceRealtimeSpeed.Should().BeTrue();
+        config.CoreBasicItem.SendThrough.Should().Be(sendThrough);
+        config.CoreBasicItem.BindInterface.Should().Be(bindInterface);
+    }
+
     [Fact]
     public void GetSystemProxyRouteExcludeAddresses_ShouldConvertOnlyRouteCompatibleEntries()
     {

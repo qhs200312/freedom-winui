@@ -15,12 +15,7 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
         DownloadService downloadHandle = new();
         downloadHandle.UpdateCompleted += (sender2, args) =>
         {
-            if (args.Success)
-            {
-                _ = UpdateFunc(false, ResUI.MsgDownloadV2rayCoreSuccessfully);
-                _ = UpdateFunc(true, Utils.UrlEncode(fileName));
-            }
-            else
+            if (!args.Success)
             {
                 _ = UpdateFunc(false, args.Msg);
             }
@@ -30,16 +25,26 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
             _ = UpdateFunc(false, args.GetException().Message);
         };
 
-        await UpdateFunc(false, string.Format(ResUI.MsgStartUpdating, ECoreType.v2rayN));
+        await UpdateFunc(false, string.Format(ResUI.MsgStartUpdating, Global.AppName));
         var result = await CheckUpdateAsync(downloadHandle, ECoreType.v2rayN, preRelease);
         if (result.Success)
         {
-            await UpdateFunc(false, string.Format(ResUI.MsgParsingSuccessfully, ECoreType.v2rayN));
+            await UpdateFunc(false, string.Format(ResUI.MsgParsingSuccessfully, Global.AppName));
             await UpdateFunc(false, result.Msg);
 
             url = result.Url.ToString();
-            fileName = Utils.GetTempPath(Utils.GetGuid());
-            await downloadHandle.DownloadFileAsync(url, fileName, true, _timeout);
+            fileName = Utils.GetTempPath(Utils.GetGuid() + ".zip");
+            if (await downloadHandle.DownloadFileWithResultAsync(url, fileName, true, _timeout))
+            {
+                var checksum = await downloadHandle.TryDownloadString(url + ".sha256", true, Global.AppName);
+                if (!AppUpdateIntegrity.Verify(fileName, checksum))
+                {
+                    await UpdateFunc(false, "软件更新包 SHA-256 校验失败或缺少校验文件，已停止安装。");
+                    return;
+                }
+                await UpdateFunc(false, ResUI.MsgDownloadV2rayCoreSuccessfully);
+                await UpdateFunc(true, fileName);
+            }
         }
         else
         {
@@ -79,11 +84,12 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
             _ = UpdateFunc(false, args.GetException().Message);
         };
 
-        await UpdateFunc(false, string.Format(ResUI.MsgStartUpdating, type));
+        var displayName = type == ECoreType.v2rayN ? Global.AppName : type.ToString();
+        await UpdateFunc(false, string.Format(ResUI.MsgStartUpdating, displayName));
         var result = await CheckUpdateAsync(downloadHandle, type, preRelease);
         if (result.Success)
         {
-            await UpdateFunc(false, string.Format(ResUI.MsgParsingSuccessfully, type));
+            await UpdateFunc(false, string.Format(ResUI.MsgParsingSuccessfully, displayName));
             await UpdateFunc(false, result.Msg);
 
             url = result.Url.ToString();
@@ -154,6 +160,8 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
             var result = await GetRemoteVersion(downloadHandle, type, preRelease);
             if (!result.Success || result.Version is null)
             {
+                if (type == ECoreType.v2rayN && result.Msg.IsNullOrEmpty())
+                    result.Msg = "更新仓库不可访问或尚未发布版本；私有仓库不支持匿名更新。";
                 return result;
             }
             return await ParseDownloadUrl(type, result);
@@ -180,13 +188,13 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
             }
 
             var gitHubReleases = JsonUtils.Deserialize<List<GitHubRelease>>(result);
-            var gitHubRelease = preRelease ? gitHubReleases?.First() : gitHubReleases?.First(r => r.Prerelease == false);
+            var gitHubRelease = preRelease ? gitHubReleases?.FirstOrDefault() : gitHubReleases?.FirstOrDefault(r => r.Prerelease == false);
             tagName = gitHubRelease?.TagName;
             //var body = gitHubRelease?.Body;
         }
         else
         {
-            var url = Path.Combine(coreInfo.Url, "latest");
+            var url = $"{coreInfo.Url?.TrimEnd('/')}/latest";
             var lastUrl = await downloadHandle.UrlRedirectAsync(url, true);
             if (lastUrl == null)
             {
@@ -195,7 +203,10 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
 
             tagName = lastUrl?.Split("/tag/").LastOrDefault();
         }
-        return new UpdateResult(true, new SemanticVersion(tagName));
+        var version = new SemanticVersion(tagName);
+        if (tagName.IsNullOrEmpty() || (type == ECoreType.v2rayN && version == new SemanticVersion(0, 0, 0)))
+            return new UpdateResult(false, "未获取到有效的发布版本，请确认仓库有可访问的 Release。");
+        return new UpdateResult(true, version);
     }
 
     private async Task<SemanticVersion> GetCoreVersion(ECoreType type)
@@ -288,7 +299,7 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
                 case ECoreType.v2rayN:
                     {
                         curVersion = new SemanticVersion(Utils.GetVersionInfo());
-                        message = string.Format(ResUI.IsLatestN, type, curVersion);
+                        message = string.Format(ResUI.IsLatestN, Global.AppName, curVersion);
                         url = string.Format(coreUrl, version);
                         break;
                     }

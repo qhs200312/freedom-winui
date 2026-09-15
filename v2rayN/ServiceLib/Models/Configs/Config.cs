@@ -8,6 +8,7 @@ public class Config
     public string IndexId { get; set; }
     public string SubIndexId { get; set; }
     public int CoreDefaultsVersion { get; set; }
+    public int PrivacyDefaultsVersion { get; set; }
 
     [JsonIgnore]
     public bool ForceRealtimeSpeed { get; set; }

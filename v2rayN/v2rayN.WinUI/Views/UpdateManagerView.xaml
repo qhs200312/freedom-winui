@@ -15,7 +15,7 @@
                     <Grid MinHeight="54" Padding="12" ColumnSpacing="12">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Text="{Binding CoreTypeForStorage}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="2" Text="{Binding Remarks}" TextWrapping="Wrap" VerticalAlignment="Center" />
                     </Grid>
                 </DataTemplate>

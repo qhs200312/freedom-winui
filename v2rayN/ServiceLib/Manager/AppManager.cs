@@ -97,7 +97,7 @@ public sealed class AppManager
 
     public bool InitComponents()
     {
-        Logging.SaveLog($"v2rayN start up | {Utils.GetRuntimeInfo()}");
+        Logging.SaveLog($"{Global.AppName} start up | {Utils.GetRuntimeInfo()}");
         Logging.LoggingEnabled(_config.GuiItem.EnableLog);
 
         //First determine the port value
@@ -170,6 +170,54 @@ public sealed class AppManager
     {
         var localPort = _config.Inbound.FirstOrDefault(t => t.Protocol == nameof(EInboundProtocol.socks))?.LocalPort ?? 10808;
         return localPort + (int)protocol;
+    }
+
+    /// <summary>
+    /// Ensures the local mixed inbounds have a bindable consecutive port range.
+    /// Windows can reject reserved ports even when no process is listening on them.
+    /// </summary>
+    public bool EnsureLocalPortsAvailable()
+    {
+        var inbound = _config.Inbound.FirstOrDefault(t => t.Protocol == nameof(EInboundProtocol.socks));
+        if (inbound == null)
+        {
+            return true;
+        }
+
+        var offsets = new List<int> { 0 };
+        if (inbound.SecondLocalPortEnabled)
+        {
+            offsets.Add((int)EInboundProtocol.socks2);
+        }
+        if (inbound.AllowLANConn && inbound.NewPort4LAN)
+        {
+            offsets.Add((int)EInboundProtocol.socks3);
+        }
+
+        bool IsRangeAvailable(int basePort) => offsets.All(offset =>
+            basePort + offset > 0 && basePort + offset < Global.MaxPort
+            && Utils.IsTcpPortAvailable(basePort + offset)
+            && (!inbound.UdpEnabled || Utils.IsUdpPortAvailable(basePort + offset)));
+
+        if (IsRangeAvailable(inbound.LocalPort))
+        {
+            return true;
+        }
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var candidate = Utils.GetFreePort();
+            if (candidate > 0 && candidate < Global.MaxPort && IsRangeAvailable(candidate))
+            {
+                var previous = inbound.LocalPort;
+                inbound.LocalPort = candidate;
+                Logging.SaveLog($"Local inbound port {previous} is unavailable; switched to {candidate}.");
+                return true;
+            }
+        }
+
+        Logging.SaveLog($"Unable to find an available local inbound port near {inbound.LocalPort}.");
+        return false;
     }
 
     #endregion Config

@@ -24,17 +24,23 @@ internal class Utils
         return Path.Combine(startupPath, fileName);
     }
 
-    public static string V2rayN => "v2rayN";
+    public const string AppName = "freedom";
+    public static readonly string[] CompatibleAppNames = [AppName, "v2rayN"];
 
-    public static void StartV2RayN()
+    public static void StartApplication(string? directory = null, bool useLocalAppData = false)
     {
+        directory ??= StartupPath();
+        var executable = CompatibleAppNames.Select(name => Path.Combine(directory,
+            OperatingSystem.IsWindows() ? name + ".exe" : name)).FirstOrDefault(File.Exists)
+            ?? throw new FileNotFoundException("freedom executable was not found.");
         Process process = new()
         {
             StartInfo = new()
             {
                 UseShellExecute = true,
-                FileName = V2rayN,
-                WorkingDirectory = StartupPath()
+                FileName = executable,
+                WorkingDirectory = directory,
+                Arguments = useLocalAppData ? "rebootas --use-local-app-data" : string.Empty
             }
         };
         process.Start();

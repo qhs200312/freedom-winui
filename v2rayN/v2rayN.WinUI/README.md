@@ -1,6 +1,6 @@
-# v2rayN WinUI 3
+# freedom WinUI 3
 
-This project is the WinUI 3 front end for v2rayN. It references the same `ServiceLib` ViewModels used by the WPF and Avalonia front ends, so configuration, validation, core control, subscriptions, routing, testing, updates and backup behavior remain shared.
+freedom is a Windows proxy client based on v2rayN. WinUI 3 is its only application front end. `ServiceLib` provides configuration, validation, core control, subscriptions, routing, testing, updates and backup behavior.
 
 ## Included functionality
 

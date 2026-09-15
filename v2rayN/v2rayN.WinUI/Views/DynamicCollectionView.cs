@@ -21,7 +21,7 @@ public sealed class DynamicCollectionView : UserControl
         var bar = new CommandBar
         {
             DefaultLabelPosition = CommandBarDefaultLabelPosition.Right,
-            IsOpen = true,
+            IsOpen = false,
             IsDynamicOverflowEnabled = false,
             Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };

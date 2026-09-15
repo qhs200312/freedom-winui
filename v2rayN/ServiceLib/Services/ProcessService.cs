@@ -10,6 +10,25 @@ public class ProcessService : IDisposable
     public int Id => _process.Id;
     public IntPtr Handle => _process.Handle;
     public bool HasExited => _process.HasExited;
+    public long WorkingSet64
+    {
+        get
+        {
+            try
+            {
+                if (_process.HasExited)
+                {
+                    return 0;
+                }
+                _process.Refresh();
+                return _process.WorkingSet64;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+    }
 
     public ProcessService(
         string fileName,

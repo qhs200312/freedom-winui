@@ -17,7 +17,6 @@ public partial class CoreConfigSingboxService
             GenDnsRules();
 
             _coreConfig.dns ??= new Dns4Sbox();
-            _coreConfig.dns.independent_cache = true;
 
             // final dns
             var routing = context.RoutingItem;
@@ -38,6 +37,12 @@ public partial class CoreConfigSingboxService
             }
             _coreConfig.dns.final = useDirectDns ? Global.SingboxDirectDNSTag : Global.SingboxRemoteDNSTag;
             var simpleDnsItem = context.SimpleDnsItem;
+            // Lookup preferences belong to DNS/resolver options, not a DNS
+            // route action (which 1.14 cannot mix with query_type/FakeIP).
+            _coreConfig.dns.strategy = Utils.DomainStrategy4Sbox(
+                useDirectDns ? simpleDnsItem.Strategy4Freedom : simpleDnsItem.Strategy4Proxy);
+            NormalizeDnsRuleStrategies(_coreConfig.dns.rules);
+            AddDnsFamilyRestriction(_coreConfig.dns.rules, null, _coreConfig.dns.strategy);
             if ((!useDirectDns) && simpleDnsItem.FakeIP == true && simpleDnsItem.GlobalFakeIp == false)
             {
                 _coreConfig.dns.rules.Add(new()
@@ -52,6 +57,53 @@ public partial class CoreConfigSingboxService
         {
             Logging.SaveLog(_tag, ex);
         }
+    }
+
+    private static void NormalizeDnsRuleStrategies(List<Rule4Sbox> rules)
+    {
+        var normalized = new List<Rule4Sbox>();
+        foreach (var rule in rules)
+        {
+            var strategy = rule.strategy;
+            rule.strategy = null;
+            AddDnsFamilyRestriction(normalized, rule, strategy);
+            normalized.Add(rule);
+        }
+        rules.Clear();
+        rules.AddRange(normalized);
+    }
+
+    private static void AddDnsFamilyRestriction(List<Rule4Sbox> rules, Rule4Sbox? condition, string? strategy)
+    {
+        var rejectedType = strategy switch
+        {
+            "ipv4_only" => 28,
+            "ipv6_only" => 1,
+            _ => 0
+        };
+        if (rejectedType == 0)
+        {
+            return;
+        }
+        if (condition is null)
+        {
+            rules.Add(new() { query_type = [rejectedType], action = "predefined", rcode = "NOERROR" });
+            return;
+        }
+        var match = JsonUtils.DeepCopy(condition);
+        match.server = null;
+        match.strategy = null;
+        match.action = null;
+        match.disable_cache = null;
+        match.rewrite_ttl = null;
+        rules.Add(new()
+        {
+            type = "logical",
+            mode = "and",
+            rules = [match, new() { query_type = [rejectedType] }],
+            action = "predefined",
+            rcode = "NOERROR"
+        });
     }
 
     private void GenDnsServers()
@@ -164,7 +216,14 @@ public partial class CoreConfigSingboxService
         _coreConfig.dns ??= new Dns4Sbox();
         _coreConfig.dns.rules ??= [];
 
-        _coreConfig.dns.rules.Add(new() { ip_accept_any = true, server = Global.SingboxHostsDNSTag });
+        // Explicit host names work with both 1.13 and 1.14. ip_accept_any is
+        // a response matcher in 1.14 and cannot be the first DNS rule anymore.
+        var hostNames = _coreConfig.dns.servers
+            .FirstOrDefault(server => server.tag == Global.SingboxHostsDNSTag)?.predefined?.Keys.ToList();
+        if (hostNames is { Count: > 0 })
+        {
+            _coreConfig.dns.rules.Add(new() { domain = hostNames, server = Global.SingboxHostsDNSTag });
+        }
 
         if (context.ProtectDomainList.Count > 0)
         {
@@ -173,6 +232,15 @@ public partial class CoreConfigSingboxService
                 server = Global.SingboxDirectDNSTag,
                 strategy = Utils.DomainStrategy4Sbox(simpleDnsItem.Strategy4Freedom),
                 domain = context.ProtectDomainList.ToList(),
+            });
+        }
+
+        if (_config.GuiItem.ProxyStunTraffic)
+        {
+            _coreConfig.dns.rules.Add(new()
+            {
+                domain = [.. WebRtcRoutingPolicy.Domains],
+                server = Global.SingboxRemoteDNSTag
             });
         }
 

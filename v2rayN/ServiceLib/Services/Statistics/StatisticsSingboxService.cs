@@ -1,60 +1,28 @@
-using System.Net.WebSockets;
-
 namespace ServiceLib.Services.Statistics;
 
 public class StatisticsSingboxService
 {
-    private readonly Config _config;
     private bool _exitFlag;
-    private ClientWebSocket? webSocket;
     private readonly Func<ServerSpeedItem, Task>? _updateFunc;
-    private string Url => $"ws://{Global.Loopback}:{AppManager.Instance.StatePort2}/traffic";
-    private static readonly string _tag = "StatisticsSingboxService";
+    private readonly SingboxProxyTrafficTracker _trafficTracker = new();
 
     public StatisticsSingboxService(Config config, Func<ServerSpeedItem, Task> updateFunc)
     {
-        _config = config;
         _updateFunc = updateFunc;
         _exitFlag = false;
 
         _ = Task.Run(Run);
     }
 
-    private async Task Init()
-    {
-        await Task.Delay(5000);
-
-        try
-        {
-            if (webSocket == null)
-            {
-                webSocket = new ClientWebSocket();
-                await webSocket.ConnectAsync(new Uri(Url), CancellationToken.None);
-            }
-        }
-        catch { }
-    }
-
     public void Close()
     {
-        try
-        {
-            _exitFlag = true;
-            if (webSocket != null)
-            {
-                webSocket.Abort();
-                webSocket = null;
-            }
-        }
-        catch (Exception ex)
-        {
-            Logging.SaveLog(_tag, ex);
-        }
+        _exitFlag = true;
+        _trafficTracker.Reset();
     }
 
     private async Task Run()
     {
-        await Init();
+        await Task.Delay(5000);
 
         while (!_exitFlag)
         {
@@ -63,63 +31,116 @@ public class StatisticsSingboxService
             {
                 if (!AppManager.Instance.IsRunningCore(ECoreType.sing_box))
                 {
+                    _trafficTracker.Reset();
                     continue;
                 }
-                if (webSocket != null)
+
+                var connections = await ClashApiManager.Instance.GetClashConnectionsAsync();
+                if (connections is null)
                 {
-                    if (webSocket.State is WebSocketState.Aborted or WebSocketState.Closed)
-                    {
-                        webSocket.Abort();
-                        webSocket = null;
-                        await Init();
-                        continue;
-                    }
-
-                    if (webSocket.State != WebSocketState.Open)
-                    {
-                        continue;
-                    }
-
-                    var buffer = new byte[1024];
-                    var res = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                    while (!res.CloseStatus.HasValue)
-                    {
-                        var result = Encoding.UTF8.GetString(buffer, 0, res.Count);
-                        if (result.IsNotEmpty())
-                        {
-                            ParseOutput(result, out var up, out var down);
-
-                            await _updateFunc?.Invoke(new ServerSpeedItem()
-                            {
-                                ProxyUp = (long)(up / 1000),
-                                ProxyDown = (long)(down / 1000)
-                            });
-                        }
-                        res = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                    }
+                    continue;
                 }
+
+                await _updateFunc?.Invoke(_trafficTracker.Update(connections));
             }
             catch
             {
+                // ignored
             }
         }
+    }
+}
+
+public sealed class SingboxProxyTrafficTracker
+{
+    private const ulong BytesPerStorageUnit = 1000;
+    private Dictionary<string, ConnectionTrafficSnapshot> _previous = new(StringComparer.Ordinal);
+    private bool _hasSnapshot;
+
+    public ServerSpeedItem Update(ClashConnections snapshot)
+    {
+        var current = CreateSnapshot(snapshot.connections);
+        if (!_hasSnapshot)
+        {
+            _previous = current;
+            _hasSnapshot = true;
+            return new();
+        }
+
+        ulong proxyUp = 0;
+        ulong proxyDown = 0;
+        foreach (var (id, connection) in current)
+        {
+            if (!connection.IsProxy)
+            {
+                continue;
+            }
+
+            var previous = _previous.GetValueOrDefault(id);
+            proxyUp = AddSaturating(proxyUp, GetDelta(connection.Upload, previous.Upload));
+            proxyDown = AddSaturating(proxyDown, GetDelta(connection.Download, previous.Download));
+        }
+
+        _previous = current;
+        return new()
+        {
+            ProxyUp = ToStorageUnit(proxyUp),
+            ProxyDown = ToStorageUnit(proxyDown)
+        };
     }
 
-    private void ParseOutput(string source, out ulong up, out ulong down)
+    public void Reset()
     {
-        up = 0;
-        down = 0;
-        try
-        {
-            var trafficItem = JsonUtils.Deserialize<TrafficItem>(source);
-            if (trafficItem != null)
-            {
-                up = trafficItem.Up;
-                down = trafficItem.Down;
-            }
-        }
-        catch
-        {
-        }
+        _previous.Clear();
+        _hasSnapshot = false;
     }
+
+    private static Dictionary<string, ConnectionTrafficSnapshot> CreateSnapshot(List<ConnectionItem>? connections)
+    {
+        var snapshot = new Dictionary<string, ConnectionTrafficSnapshot>(StringComparer.Ordinal);
+        foreach (var connection in connections ?? [])
+        {
+            if (connection.id.IsNullOrEmpty())
+            {
+                continue;
+            }
+
+            snapshot[connection.id!] = new(
+                connection.upload,
+                connection.download,
+                connection.chains?.Any(IsProxyChain) == true);
+        }
+        return snapshot;
+    }
+
+    private static bool IsProxyChain(string? tag)
+    {
+        if (tag.IsNullOrEmpty())
+        {
+            return false;
+        }
+
+        return tag.Equals(Global.ProxyTag, StringComparison.OrdinalIgnoreCase)
+            || tag.StartsWith(Global.ProxyTag, StringComparison.OrdinalIgnoreCase)
+            || tag.Contains($"-{Global.ProxyTag}-", StringComparison.OrdinalIgnoreCase)
+            || tag.EndsWith($"-{Global.ProxyTag}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static ulong GetDelta(ulong current, ulong previous)
+    {
+        return current >= previous ? current - previous : current;
+    }
+
+    private static ulong AddSaturating(ulong total, ulong value)
+    {
+        return ulong.MaxValue - total < value ? ulong.MaxValue : total + value;
+    }
+
+    private static long ToStorageUnit(ulong bytes)
+    {
+        var value = bytes / BytesPerStorageUnit;
+        return value > long.MaxValue ? long.MaxValue : (long)value;
+    }
+
+    private readonly record struct ConnectionTrafficSnapshot(ulong Upload, ulong Download, bool IsProxy);
 }

@@ -1,13 +1,16 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
-    <AssemblyName>v2rayN</AssemblyName>
+    <AssemblyName>freedom</AssemblyName>
+    <AssemblyTitle>freedom</AssemblyTitle>
+    <Product>freedom</Product>
+    <Description>freedom Windows proxy client</Description>
     <RootNamespace>v2rayN.WinUI</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Assets\v2rayN.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\freedom.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <UseWinUI>true</UseWinUI>
@@ -30,7 +33,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\v2rayN.ico" />
+    <Content Include="Assets\freedom.ico" />
+    <Content Include="Assets\freedom.png" />
     <Content Include="Assets\NotifyIcon*.ico" />
   </ItemGroup>
 
@@ -49,14 +53,21 @@
       <_WinUIRootResource Include="$(TargetDir)$(AssemblyName).pri;$(TargetDir)App.xbf;$(TargetDir)MainWindow.xbf" />
       <_WinUIViewResource Include="$(TargetDir)Views\**\*.xbf" />
       <_WinUIAsset Include="$(TargetDir)Assets\**\*" />
+      <_AmazToolPublishFile Include="$(TargetDir)AmazTool.*" />
+      <_AmazToolZhHansResource Include="$(TargetDir)zh-Hans\AmazTool.resources.dll" />
+      <_AmazToolZhHantResource Include="$(TargetDir)zh-Hant\AmazTool.resources.dll" />
     </ItemGroup>
 
     <Error Condition="'@(_WinUIViewResource)' == ''" Text="WinUI view XBF resources were not generated." />
     <Error Condition="'@(_WinUIAsset)' == ''" Text="WinUI assets were not generated." />
+    <Error Condition="'@(_AmazToolPublishFile)' == '' or !Exists('$(TargetDir)AmazTool.exe')" Text="AmazTool proxy guard was not generated." />
 
     <Copy SourceFiles="@(_WinUIRootResource)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(_WinUIViewResource)" DestinationFiles="@(_WinUIViewResource->'$(PublishDir)Views\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(_WinUIAsset)" DestinationFiles="@(_WinUIAsset->'$(PublishDir)Assets\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_AmazToolPublishFile)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_AmazToolZhHansResource)" DestinationFolder="$(PublishDir)zh-Hans" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_AmazToolZhHantResource)" DestinationFolder="$(PublishDir)zh-Hant" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

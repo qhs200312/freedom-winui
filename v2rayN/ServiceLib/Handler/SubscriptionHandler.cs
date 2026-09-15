@@ -72,7 +72,7 @@ public static class SubscriptionHandler
             return false;
         }
 
-        if (!url.StartsWith(Global.HttpsProtocol) && !url.StartsWith(Global.HttpProtocol))
+        if (!ClipboardSubscriptionImport.IsSubscriptionUrl(url))
         {
             return false;
         }
@@ -92,6 +92,11 @@ public static class SubscriptionHandler
 
     private static async Task<string> DownloadSubscriptionContent(DownloadService downloadHandle, string url, bool blProxy, string userAgent)
     {
+        // Preserve subscription format negotiation independently of the UI brand.
+        if (userAgent.IsNullOrEmpty())
+        {
+            userAgent = $"{Global.LegacyAppName}/{Utils.GetVersionInfo()}";
+        }
         var result = await downloadHandle.TryDownloadString(url, blProxy, userAgent);
 
         // If download with proxy fails, try direct connection

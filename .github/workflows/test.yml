@@ -3,10 +3,11 @@ name: Code Test
 on:
   pull_request:
     branches:
-      - master
+      - main
     paths:
-      - 'v2rayN/ServiceLib/Services/CoreConfig/**'
-      - 'v2rayN/ServiceLib/Handler/Fmt/**'
+      - 'v2rayN/ServiceLib/**'
+      - 'v2rayN/ServiceLib.Tests/**'
+      - 'v2rayN/AmazTool/**'
       - '.github/workflows/test.yml'
 
 jobs:
@@ -14,15 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@v4
       with:
-        submodules: 'recursive'
         fetch-depth: '0'
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v5.4.0
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x'
+        dotnet-version: '10.0.x'
 
     - name: Test Code
       working-directory: ./v2rayN

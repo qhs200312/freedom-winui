@@ -7,6 +7,48 @@
     mc:Ignorable="d">
 
     <Grid Background="{ThemeResource AppBackgroundBrush}">
+        <Grid.Resources>
+        <MenuFlyout x:Key="ProfileContextMenu">
+            <MenuFlyoutItem Text="设为主节点" Tag="profile-activate" Click="FeatureButton_Click">
+                <MenuFlyoutItem.Icon><SymbolIcon Symbol="Accept" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutSeparator />
+            <MenuFlyoutItem Text="编辑" Tag="edit-server" Click="FeatureButton_Click">
+                <MenuFlyoutItem.Icon><SymbolIcon Symbol="Edit" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="复制" Tag="copy-server" Click="FeatureButton_Click">
+                <MenuFlyoutItem.Icon><SymbolIcon Symbol="Copy" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutItem Text="删除" Tag="remove-server" Click="FeatureButton_Click">
+                <MenuFlyoutItem.Icon><SymbolIcon Symbol="Delete" /></MenuFlyoutItem.Icon>
+            </MenuFlyoutItem>
+            <MenuFlyoutSeparator />
+            <MenuFlyoutSubItem Text="测试">
+                <MenuFlyoutItem Text="TCP Ping" Tag="tcp-ping" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="真实延迟" Tag="real-ping" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="UDP 测试" Tag="udp-test" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="测速" Tag="speed-test" Click="FeatureButton_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="综合测试" Tag="mixed-test" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="快速延迟" Tag="fast-ping" Click="FeatureButton_Click" />
+            </MenuFlyoutSubItem>
+            <MenuFlyoutSubItem Text="移动">
+                <MenuFlyoutItem Text="置顶" Tag="move-top" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="上移" Tag="move-up" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="下移" Tag="move-down" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="置底" Tag="move-bottom" Click="FeatureButton_Click" />
+            </MenuFlyoutSubItem>
+            <MenuFlyoutSubItem Text="导出">
+                <MenuFlyoutItem Text="分享当前节点" Tag="export" Click="FeatureButton_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="导出客户端配置" Tag="export-client" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="客户端配置到剪贴板" Tag="export-client-clipboard" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="导出分享链接" Tag="export-url" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="导出 Base64" Tag="export-base64" Click="FeatureButton_Click" />
+                <MenuFlyoutItem Text="导出内部 URI" Tag="export-inner" Click="FeatureButton_Click" />
+            </MenuFlyoutSubItem>
+        </MenuFlyout>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="36" />
             <RowDefinition Height="*" />
@@ -18,8 +60,8 @@
                     <ColumnDefinition Width="28" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Image Width="16" Height="16" HorizontalAlignment="Left" Source="Assets/v2rayN.ico" />
-                <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="12" Text="v2rayN · WinUI 3" />
+                <Image Width="16" Height="16" HorizontalAlignment="Left" Source="Assets/freedom.png" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="12" Text="freedom" />
             </Grid>
         </Grid>
 
@@ -38,6 +80,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Grid Height="72" Margin="16,12,16,8">
@@ -45,11 +88,11 @@
                             <ColumnDefinition Width="44" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Border Width="38" Height="38" Background="{StaticResource BrandBrush}" CornerRadius="8">
-                            <FontIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="19" Foreground="White" Glyph="&#xE774;" />
+                        <Border Width="38" Height="38" CornerRadius="8">
+                            <Image Stretch="UniformToFill" Source="Assets/freedom.png" />
                         </Border>
                         <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock FontFamily="Segoe UI Variable Display" FontSize="16" FontWeight="SemiBold" Text="v2rayN" />
+                            <TextBlock FontFamily="Segoe UI Variable Display" FontSize="16" FontWeight="SemiBold" Text="freedom" />
                             <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="Modern Shell" />
                         </StackPanel>
                     </Grid>
@@ -57,9 +100,17 @@
                     <ListView
                         x:Name="NavList"
                         Grid.Row="1"
-                        Margin="8,0,8,12"
+                        Margin="8,0,8,4"
                         SelectionChanged="NavList_SelectionChanged"
                         SelectionMode="Single">
+                        <ListView.Resources>
+                            <SolidColorBrush x:Key="ListViewItemBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#12808080" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#24808080" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#24087F86" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#30087F86" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#40087F86" />
+                        </ListView.Resources>
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -106,6 +157,55 @@
                             </StackPanel>
                         </ListViewItem>
                     </ListView>
+
+                    <Border
+                        Grid.Row="2"
+                        Margin="16,0,16,16"
+                        Padding="4,12,4,0"
+                        BorderBrush="{ThemeResource PanelStrokeBrush}"
+                        BorderThickness="0,1,0,0">
+                        <Grid RowSpacing="7">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock
+                                Foreground="{ThemeResource MutedTextBrush}"
+                                FontSize="11"
+                                Text="进程内存" />
+                            <Grid Grid.Row="1" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" FontSize="12" Text="freedom" />
+                                <TextBlock
+                                    x:Name="AppMemoryText"
+                                    Grid.Column="1"
+                                    MinWidth="66"
+                                    HorizontalAlignment="Right"
+                                    FontFamily="Cascadia Mono"
+                                    FontSize="12"
+                                    Text="-- MB" />
+                            </Grid>
+                            <Grid Grid.Row="2" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="CoreMemoryNameText" VerticalAlignment="Center" FontSize="12" Text="sing-box" />
+                                <TextBlock
+                                    x:Name="CoreMemoryText"
+                                    Grid.Column="1"
+                                    MinWidth="66"
+                                    HorizontalAlignment="Right"
+                                    FontFamily="Cascadia Mono"
+                                    FontSize="12"
+                                    Text="-- MB" />
+                            </Grid>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 
@@ -156,18 +256,20 @@
                                 <TextBlock FontFamily="Segoe UI Variable Display" FontSize="28" FontWeight="SemiBold" Text="仪表盘" />
                                 <TextBlock Margin="0,5,0,0" Style="{StaticResource QuietTextStyle}" Text="查看内核运行情况并快速调整常用开关" />
                             </StackPanel>
-                            <StackPanel x:Name="HeaderStatusPanel" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Border Padding="12,6" Background="{StaticResource SuccessBrush}" CornerRadius="6">
-                                    <TextBlock x:Name="CoreStatusText" Foreground="White" FontWeight="SemiBold" Text="正在初始化" />
-                                </Border>
-                                <TextBlock x:Name="ActiveServerHeaderText" MaxWidth="320" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                <Button x:Name="StopCoreButton" Click="StopCore_Click" ToolTipService.ToolTip="停止核心">
-                                    <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Stop" /><TextBlock Text="停止" /></StackPanel>
-                                </Button>
-                                <Button x:Name="ReloadCoreButton" Click="ReloadCore_Click" ToolTipService.ToolTip="启动核心">
-                                    <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Play" /><TextBlock x:Name="ReloadCoreButtonText" Text="启动" /></StackPanel>
-                                </Button>
-                            </StackPanel>
+                            <Border x:Name="HeaderStatusPanel" Grid.Column="1" Padding="8,5" Background="{ThemeResource BrandPanelBrush}" BorderBrush="{ThemeResource BrandPanelStrokeBrush}" BorderThickness="1" CornerRadius="6" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Border Padding="12,6" Background="{StaticResource SuccessBrush}" CornerRadius="6">
+                                        <TextBlock x:Name="CoreStatusText" Foreground="White" FontWeight="SemiBold" Text="正在初始化" />
+                                    </Border>
+                                    <TextBlock x:Name="ActiveServerHeaderText" MaxWidth="320" VerticalAlignment="Center" Foreground="{ThemeResource BrandBrush}" TextTrimming="CharacterEllipsis" />
+                                    <Button x:Name="StopCoreButton" Click="StopCore_Click" ToolTipService.ToolTip="停止核心">
+                                        <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Stop" /><TextBlock Text="停止" /></StackPanel>
+                                    </Button>
+                                    <Button x:Name="ReloadCoreButton" Click="ReloadCore_Click" ToolTipService.ToolTip="启动核心">
+                                        <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Play" /><TextBlock x:Name="ReloadCoreButtonText" Text="启动" /></StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
                         </Grid>
 
                         <Grid x:Name="MetricGrid" Grid.Row="1" ColumnSpacing="12" RowSpacing="12">
@@ -216,21 +318,21 @@
                                 </Border>
                                 <Border Grid.Column="1" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
                                     <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="上传速度" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource SuccessBrush}" Symbol="Upload" /></Grid>
+                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="上传速度" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Upload" /></Grid>
                                         <TextBlock x:Name="UploadSpeedText" Style="{StaticResource MetricValueStyle}" Text="0 B/s" />
                                         <TextBlock x:Name="UploadTotalText" Style="{StaticResource QuietTextStyle}" Text="本次 0 B" />
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="TotalTrafficCard" Grid.Column="2" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
                                     <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="总流量" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource WarningBrush}" Symbol="Globe" /></Grid>
+                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="代理流量" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Globe" /></Grid>
                                         <TextBlock x:Name="TotalTrafficText" Style="{StaticResource MetricValueStyle}" Text="0 B" />
                                         <TextBlock x:Name="TotalTrafficDetailText" Style="{StaticResource QuietTextStyle}" Text="上传 0 B · 下载 0 B" />
                                     </StackPanel>
                                 </Border>
                                 <Border x:Name="ActiveServerCard" Grid.Column="3" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
                                     <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="当前服务器" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource WarningBrush}" Symbol="Globe" /></Grid>
+                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="当前服务器" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Globe" /></Grid>
                                         <TextBlock x:Name="ActiveServerText" Style="{StaticResource MetricValueStyle}" FontSize="20" Text="未选择" TextTrimming="CharacterEllipsis" />
                                         <TextBlock x:Name="ActiveServerDetailText" Style="{StaticResource QuietTextStyle}" Text="-" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
@@ -274,24 +376,48 @@
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                                <Border Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock FontWeight="SemiBold" Text="系统代理" />
-                                        <TextBlock Style="{StaticResource QuietTextStyle}" Text="切换操作系统代理模式" />
-                                        <ComboBox x:Name="ProxyModeCombo" SelectionChanged="ProxyModeCombo_SelectionChanged">
-                                            <ComboBoxItem Content="清除系统代理" Tag="0" />
-                                            <ComboBoxItem Content="自动配置系统代理" Tag="1" />
-                                            <ComboBoxItem Content="不改变系统代理" Tag="2" />
-                                            <ComboBoxItem Content="PAC 模式" Tag="3" />
-                                        </ComboBox>
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Column="1" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock FontWeight="SemiBold" Text="TUN 模式" />
-                                        <TextBlock Style="{StaticResource QuietTextStyle}" Text="接管设备的所有网络流量" />
-                                        <ToggleSwitch x:Name="TunToggle" OffContent="关闭" OnContent="开启" Toggled="TunToggle_Toggled" />
-                                    </StackPanel>
+                                <Border Grid.ColumnSpan="2" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
+                                    <Grid RowSpacing="10">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock FontWeight="SemiBold" Text="网络模式" />
+                                        <TextBlock Grid.Row="1" Style="{StaticResource QuietTextStyle}" Text="配置系统代理与虚拟网卡接管" />
+                                        <Grid Grid.Row="2" ColumnSpacing="16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="1" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid RowSpacing="5">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="系统代理" />
+                                                <ComboBox Grid.Row="1" x:Name="ProxyModeCombo" HorizontalAlignment="Stretch" SelectionChanged="ProxyModeCombo_SelectionChanged">
+                                                    <ComboBoxItem Content="清除系统代理" Tag="0" />
+                                                    <ComboBoxItem Content="自动配置系统代理" Tag="1" />
+                                                    <ComboBoxItem Content="不改变系统代理" Tag="2" />
+                                                    <ComboBoxItem Content="PAC 模式" Tag="3" />
+                                                </ComboBox>
+                                            </Grid>
+                                            <Border Grid.Column="1" Background="{ThemeResource PanelStrokeBrush}" />
+                                            <Grid Grid.Column="2" RowSpacing="5">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="虚拟网卡" />
+                                                <ToggleSwitch Grid.Row="1" x:Name="TunToggle" OffContent="关闭" OnContent="开启" Toggled="TunToggle_Toggled" />
+                                            </Grid>
+                                        </Grid>
+                                        <TextBlock x:Name="UdpInterceptionStatusText" Grid.Row="3"
+                                            TextWrapping="Wrap" Style="{StaticResource QuietTextStyle}" Text="UDP 接管：关闭" />
+                                    </Grid>
                                 </Border>
                                 <Border x:Name="RoutingCard" Grid.Column="2" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
                                     <StackPanel Spacing="10">
@@ -313,10 +439,23 @@
                                             <ProgressRing x:Name="OutboundIpProgress" Width="18" Height="18" HorizontalAlignment="Right" IsActive="False" />
                                         </Grid>
                                         <TextBlock x:Name="OutboundIpDetailText" Grid.Row="1" Style="{StaticResource QuietTextStyle}" Text="等待检测" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock x:Name="OutboundIpText" Grid.Row="2" FontFamily="Cascadia Mono" FontSize="20" FontWeight="SemiBold" Text="--" TextTrimming="CharacterEllipsis" />
+                                        <Grid Grid.Row="2" ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="OutboundIpText" VerticalAlignment="Center" FontFamily="Cascadia Mono" FontSize="20" FontWeight="SemiBold" Text="--" TextTrimming="CharacterEllipsis" />
+                                            <StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="1">
+                                                <TextBlock HorizontalAlignment="Right" Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="节点延迟" />
+                                                <TextBlock x:Name="NodeLatencyText" HorizontalAlignment="Right" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" Text="未测试" />
+                                            </StackPanel>
+                                        </Grid>
                                         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
                                             <Button x:Name="RefreshOutboundIpButton" Click="RefreshOutboundIp_Click" ToolTipService.ToolTip="重新检测出口 IP">
                                                 <SymbolIcon Symbol="Refresh" />
+                                            </Button>
+                                            <Button x:Name="RefreshNodeLatencyButton" Click="RefreshNodeLatency_Click" ToolTipService.ToolTip="检测当前节点真实延迟">
+                                                <SymbolIcon Symbol="Clock" />
                                             </Button>
                                             <Button x:Name="CopyOutboundIpButton" Click="CopyOutboundIp_Click" IsEnabled="False" ToolTipService.ToolTip="复制出口 IP">
                                                 <SymbolIcon Symbol="Copy" />
@@ -429,50 +568,130 @@
                         <StackPanel><TextBlock Style="{StaticResource SectionTitleStyle}" FontSize="28" Text="配置项" /><TextBlock Margin="0,5,0,0" Style="{StaticResource QuietTextStyle}" Text="服务器列表与完整管理操作" /></StackPanel>
                         <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
                             <ComboBox x:Name="ProfileGroupCombo" Width="220" Header="订阅分组" DisplayMemberPath="Remarks" SelectionChanged="ProfileGroupCombo_SelectionChanged" />
-                            <TextBox x:Name="ProfileSearchBox" Width="280" PlaceholderText="筛选名称、地址或订阅" TextChanged="ProfileSearchBox_TextChanged" />
+                            <TextBox x:Name="ProfileSearchBox" Width="280" Header="筛选" PlaceholderText="名称、地址或订阅" TextChanged="ProfileSearchBox_TextChanged" />
                         </StackPanel>
                     </Grid>
-                    <ScrollViewer Grid.Row="1" Margin="0,18,0,12" HorizontalScrollMode="Enabled" HorizontalScrollBarVisibility="Auto" VerticalScrollMode="Disabled">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Button Tag="add-clipboard" Click="FeatureButton_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Paste" /><TextBlock Text="从剪贴板导入" /></StackPanel></Button>
-                            <Button Tag="add-image" Click="FeatureButton_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Pictures" /><TextBlock Text="从图片识别" /></StackPanel></Button>
-                            <DropDownButton><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Add" /><TextBlock Text="添加服务器" /></StackPanel><DropDownButton.Flyout><MenuFlyout>
-                                <MenuFlyoutItem Text="VMess" Tag="vmess" Click="AddProtocol_Click" /><MenuFlyoutItem Text="VLESS" Tag="vless" Click="AddProtocol_Click" /><MenuFlyoutItem Text="Shadowsocks" Tag="shadowsocks" Click="AddProtocol_Click" /><MenuFlyoutItem Text="SOCKS" Tag="socks" Click="AddProtocol_Click" /><MenuFlyoutItem Text="HTTP" Tag="http" Click="AddProtocol_Click" /><MenuFlyoutItem Text="Trojan" Tag="trojan" Click="AddProtocol_Click" /><MenuFlyoutItem Text="Hysteria2" Tag="hysteria2" Click="AddProtocol_Click" /><MenuFlyoutItem Text="TUIC" Tag="tuic" Click="AddProtocol_Click" /><MenuFlyoutItem Text="WireGuard" Tag="wireguard" Click="AddProtocol_Click" /><MenuFlyoutItem Text="AnyTLS" Tag="anytls" Click="AddProtocol_Click" /><MenuFlyoutItem Text="NaiveProxy" Tag="naive" Click="AddProtocol_Click" /><MenuFlyoutSeparator /><MenuFlyoutItem Text="自定义配置" Tag="custom" Click="AddProtocol_Click" /><MenuFlyoutItem Text="策略组" Tag="policy" Click="AddProtocol_Click" /><MenuFlyoutItem Text="代理链" Tag="chain" Click="AddProtocol_Click" />
-                            </MenuFlyout></DropDownButton.Flyout></DropDownButton>
-                            <Button Tag="edit-server" Click="FeatureButton_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Edit" /><TextBlock Text="编辑" /></StackPanel></Button>
-                            <Button Tag="remove-server" Click="FeatureButton_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Delete" /><TextBlock Text="删除" /></StackPanel></Button>
-                            <Button Tag="profile-activate" Click="FeatureButton_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Accept" /><TextBlock Text="设为活动" /></StackPanel></Button>
-                            <Button Tag="tcp-ping" Click="FeatureButton_Click" Content="TCP Ping" />
-                            <Button Tag="real-ping" Click="FeatureButton_Click" Content="真实延迟" />
-                            <Button Tag="udp-test" Click="FeatureButton_Click" Content="UDP 测试" />
-                            <Button Tag="speed-test" Click="FeatureButton_Click" Content="测速" />
-                            <Button Tag="export" Click="FeatureButton_Click"><StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Share" /><TextBlock Text="分享 / 导出" /></StackPanel></Button>
-                            <Button Tag="copy-server" Click="FeatureButton_Click" Content="复制" />
-                            <Button Tag="deduplicate" Click="FeatureButton_Click" Content="去重" />
-                            <Button Tag="remove-invalid" Click="FeatureButton_Click" Content="清理无效" />
-                            <Button Tag="mixed-test" Click="FeatureButton_Click" Content="综合测试" />
-                            <Button Tag="fast-ping" Click="FeatureButton_Click" Content="快速延迟" />
-                            <Button Tag="sort-results" Click="FeatureButton_Click" Content="按结果排序" />
-                            <ComboBox x:Name="SortColumnCombo" Width="170" PlaceholderText="按列排序" SelectionChanged="SortColumnCombo_SelectionChanged"><ComboBoxItem Content="类型" Tag="ConfigType" /><ComboBoxItem Content="备注" Tag="Remarks" /><ComboBoxItem Content="地址" Tag="Address" /><ComboBoxItem Content="端口" Tag="Port" /><ComboBoxItem Content="传输" Tag="Network" /><ComboBoxItem Content="TLS" Tag="StreamSecurity" /><ComboBoxItem Content="订阅" Tag="SubRemarks" /><ComboBoxItem Content="延迟" Tag="DelayVal" /><ComboBoxItem Content="速度" Tag="SpeedVal" /><ComboBoxItem Content="今日上传" Tag="TodayUp" /><ComboBoxItem Content="今日下载" Tag="TodayDown" /><ComboBoxItem Content="总上传" Tag="TotalUp" /><ComboBoxItem Content="总下载" Tag="TotalDown" /></ComboBox>
-                            <Button Tag="move-top" Click="FeatureButton_Click" Content="置顶" /><Button Tag="move-up" Click="FeatureButton_Click" Content="上移" /><Button Tag="move-down" Click="FeatureButton_Click" Content="下移" /><Button Tag="move-bottom" Click="FeatureButton_Click" Content="置底" />
-                            <ComboBox x:Name="MoveGroupCombo" Width="180" PlaceholderText="移动到分组" DisplayMemberPath="Remarks" SelectionChanged="MoveGroupCombo_SelectionChanged" />
-                            <Button Tag="export-client" Click="FeatureButton_Click" Content="导出客户端配置" /><Button Tag="export-client-clipboard" Click="FeatureButton_Click" Content="客户端配置到剪贴板" /><Button Tag="export-url" Click="FeatureButton_Click" Content="导出分享链接" /><Button Tag="export-base64" Click="FeatureButton_Click" Content="导出 Base64" /><Button Tag="export-inner" Click="FeatureButton_Click" Content="导出内部 URI" />
-                            <Button Tag="generate-all" Click="FeatureButton_Click" Content="全部节点生成策略组" /><Button Tag="generate-region" Click="FeatureButton_Click" Content="按地区生成策略组" />
-                        </StackPanel>
-                    </ScrollViewer>
+                    <Grid Grid.Row="1" Margin="0,18,0,12" ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button
+                            Tag="profile-activate"
+                            Click="FeatureButton_Click"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <SymbolIcon Symbol="Accept" />
+                                <TextBlock Text="设为主节点" />
+                            </StackPanel>
+                        </Button>
+
+                        <MenuBar Grid.Column="1" HorizontalAlignment="Left">
+                            <MenuBarItem Title="添加">
+                                <MenuFlyoutItem Text="从剪贴板导入" Tag="add-clipboard" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="从图片识别" Tag="add-image" Click="FeatureButton_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutSubItem Text="添加服务器">
+                                    <MenuFlyoutItem Text="VMess" Tag="vmess" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="VLESS" Tag="vless" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="Shadowsocks" Tag="shadowsocks" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="SOCKS" Tag="socks" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="HTTP" Tag="http" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="Trojan" Tag="trojan" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="Hysteria2" Tag="hysteria2" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="TUIC" Tag="tuic" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="WireGuard" Tag="wireguard" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="AnyTLS" Tag="anytls" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="NaiveProxy" Tag="naive" Click="AddProtocol_Click" />
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem Text="自定义配置" Tag="custom" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="策略组" Tag="policy" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="代理链" Tag="chain" Click="AddProtocol_Click" />
+                                </MenuFlyoutSubItem>
+                            </MenuBarItem>
+
+                            <MenuBarItem Title="管理">
+                                <MenuFlyoutItem Text="编辑" Tag="edit-server" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="复制" Tag="copy-server" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="删除" Tag="remove-server" Click="FeatureButton_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="去除重复节点" Tag="deduplicate" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="清理无效节点" Tag="remove-invalid" Click="FeatureButton_Click" />
+                            </MenuBarItem>
+
+                            <MenuBarItem Title="测试">
+                                <MenuFlyoutItem Text="TCP Ping" Tag="tcp-ping" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="真实延迟" Tag="real-ping" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="UDP 测试" Tag="udp-test" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="测速" Tag="speed-test" Click="FeatureButton_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="综合测试" Tag="mixed-test" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="快速延迟" Tag="fast-ping" Click="FeatureButton_Click" />
+                            </MenuBarItem>
+
+                            <MenuBarItem Title="排序">
+                                <MenuFlyoutItem Text="按测试结果排序" Tag="sort-results" Click="FeatureButton_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="按类型" Tag="ConfigType" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按备注" Tag="Remarks" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按地址" Tag="Address" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按端口" Tag="Port" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按传输" Tag="Network" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按 TLS" Tag="StreamSecurity" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按订阅" Tag="SubRemarks" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按延迟" Tag="DelayVal" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按速度" Tag="SpeedVal" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按今日上传" Tag="TodayUp" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按今日下载" Tag="TodayDown" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按总上传" Tag="TotalUp" Click="SortColumnMenuItem_Click" />
+                                <MenuFlyoutItem Text="按总下载" Tag="TotalDown" Click="SortColumnMenuItem_Click" />
+                            </MenuBarItem>
+
+                            <MenuBarItem Title="移动">
+                                <MenuFlyoutItem Text="置顶" Tag="move-top" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="上移" Tag="move-up" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="下移" Tag="move-down" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="置底" Tag="move-bottom" Click="FeatureButton_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutSubItem x:Name="MoveToGroupMenu" Text="移动到分组" />
+                            </MenuBarItem>
+
+                            <MenuBarItem Title="导出">
+                                <MenuFlyoutItem Text="分享当前节点" Tag="export" Click="FeatureButton_Click" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="导出客户端配置" Tag="export-client" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="客户端配置到剪贴板" Tag="export-client-clipboard" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="导出分享链接" Tag="export-url" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="导出 Base64" Tag="export-base64" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="导出内部 URI" Tag="export-inner" Click="FeatureButton_Click" />
+                            </MenuBarItem>
+
+                            <MenuBarItem Title="策略组">
+                                <MenuFlyoutItem Text="全部节点生成策略组" Tag="generate-all" Click="FeatureButton_Click" />
+                                <MenuFlyoutItem Text="按地区生成策略组" Tag="generate-region" Click="FeatureButton_Click" />
+                            </MenuBarItem>
+                        </MenuBar>
+                    </Grid>
                     <Border Grid.Row="2" Style="{StaticResource PanelStyle}">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="42" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                             <Grid Padding="14,0" Background="{ThemeResource AccentSoftBrush}" ColumnSpacing="12">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="60" /><ColumnDefinition Width="110" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="80" /></Grid.ColumnDefinitions>
-                                <TextBlock VerticalAlignment="Center" Text="状态" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="类型" /><TextBlock Grid.Column="2" VerticalAlignment="Center" Text="备注" /><TextBlock Grid.Column="3" VerticalAlignment="Center" Text="地址" /><TextBlock Grid.Column="4" VerticalAlignment="Center" Text="端口" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="传输" /><TextBlock Grid.Column="6" VerticalAlignment="Center" Text="TLS" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="订阅" /><TextBlock Grid.Column="8" VerticalAlignment="Center" Text="延迟" />
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="1.7*" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="80" /></Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" Text="类型" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="备注" /><TextBlock Grid.Column="2" VerticalAlignment="Center" Text="地址" /><TextBlock Grid.Column="3" VerticalAlignment="Center" Text="端口" /><TextBlock Grid.Column="4" VerticalAlignment="Center" Text="传输" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="TLS" /><TextBlock Grid.Column="6" VerticalAlignment="Center" Text="订阅" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="延迟" />
                             </Grid>
-                            <ListView x:Name="ProfilesList" Grid.Row="1" IsItemClickEnabled="True" ItemClick="ProfilesList_ItemClick" DoubleTapped="ProfilesList_DoubleTapped" SelectionChanged="ProfilesList_SelectionChanged" SelectionMode="Extended">
+                            <ListView x:Name="ProfilesList" Grid.Row="1" IsItemClickEnabled="True" ItemClick="ProfilesList_ItemClick" DoubleTapped="ProfilesList_DoubleTapped" KeyDown="ProfilesList_KeyDown" SelectionChanged="ProfilesList_SelectionChanged" SelectionMode="Extended">
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid MinHeight="42" Padding="10,0" ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="60" /><ColumnDefinition Width="110" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="80" /></Grid.ColumnDefinitions>
-                                            <TextBlock VerticalAlignment="Center" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold" Text="{Binding IsActive}" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding ConfigType}" /><TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding Remarks}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="3" VerticalAlignment="Center" FontFamily="Cascadia Mono" Text="{Binding Address}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="4" VerticalAlignment="Center" Text="{Binding Port}" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="{Binding Network}" /><TextBlock Grid.Column="6" VerticalAlignment="Center" Text="{Binding StreamSecurity}" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="{Binding SubRemarks}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="8" VerticalAlignment="Center" Text="{Binding DelayVal}" />
+                                        <Grid MinHeight="42" Padding="10,0" ColumnSpacing="12" ContextFlyout="{StaticResource ProfileContextMenu}" ContextRequested="ProfileRow_ContextRequested">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="1.7*" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="80" /></Grid.ColumnDefinitions>
+                                            <TextBlock VerticalAlignment="Center" Text="{Binding ConfigType}" />
+                                            <Grid Grid.Column="1" ColumnSpacing="5">
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                <TextBlock VerticalAlignment="Center" Foreground="{StaticResource BrandBrush}" FontSize="12" FontWeight="SemiBold" Text="{Binding ActiveLabel}" ToolTipService.ToolTip="主节点" />
+                                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding Remarks}" TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                            <TextBlock Grid.Column="2" VerticalAlignment="Center" FontFamily="Cascadia Mono" Text="{Binding Address}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="3" VerticalAlignment="Center" Text="{Binding Port}" /><TextBlock Grid.Column="4" VerticalAlignment="Center" Text="{Binding Network}" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="{Binding StreamSecurity}" /><TextBlock Grid.Column="6" VerticalAlignment="Center" Text="{Binding SubRemarks}" TextTrimming="CharacterEllipsis" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="{Binding DelayVal}" />
                                         </Grid>
                                     </DataTemplate>
                                 </ListView.ItemTemplate>
@@ -487,7 +706,7 @@
                     <ContentControl x:Name="ModuleContent" Grid.Row="1" Margin="0,18,0,0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
                 </Grid>
 
-                <InfoBar x:Name="MessageBar" Margin="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsClosable="True" IsOpen="False" MaxWidth="520" Severity="Informational" />
+                <InfoBar x:Name="MessageBar" Margin="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource BrandPanelBrush}" BorderBrush="{ThemeResource BrandPanelStrokeBrush}" Foreground="{ThemeResource BrandBrush}" IsClosable="True" IsOpen="False" MaxWidth="520" Severity="Informational" />
             </Grid>
         </Grid>
     </Grid>

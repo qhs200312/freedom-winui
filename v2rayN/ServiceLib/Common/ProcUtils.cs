@@ -76,6 +76,10 @@ public static class ProcUtils
         }
     }
 
+    public static string GetRestartArguments(bool useLocalAppData) => useLocalAppData
+        ? $"{Global.RebootAs} {Global.UseLocalAppDataArgument}"
+        : Global.RebootAs;
+
     public static bool RebootAsAdmin(bool blAdmin = true)
     {
         try
@@ -83,7 +87,7 @@ public static class ProcUtils
             ProcessStartInfo startInfo = new()
             {
                 UseShellExecute = true,
-                Arguments = Global.RebootAs,
+                Arguments = GetRestartArguments(Environment.GetEnvironmentVariable(Global.LocalAppData) == "1"),
                 WorkingDirectory = Utils.StartupPath(),
                 FileName = Utils.GetExePath(),
                 Verb = blAdmin ? "runas" : null,

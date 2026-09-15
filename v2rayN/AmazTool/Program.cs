@@ -32,6 +32,13 @@ internal static class Program
                     HandleUpgrade(args);
                     break;
 
+                case "proxyguard":
+                    if (OperatingSystem.IsWindows())
+                    {
+                        ProxyGuard.Run(args);
+                    }
+                    break;
+
                 case "help":
                 case "--help":
                 case "-h":
@@ -76,7 +83,7 @@ internal static class Program
     {
         Console.WriteLine("Restarting application...");
         Thread.Sleep(1000);
-        Utils.StartV2RayN();
+        Utils.StartApplication();
     }
 
     /// <summary>
@@ -94,7 +101,9 @@ internal static class Program
         var processId = args.Length > 2 && int.TryParse(args[2], out var parsedProcessId)
             ? parsedProcessId
             : (int?)null;
-        UpgradeApp.Upgrade(args[1], processId);
+        Environment.ExitCode = UpgradeApp.Upgrade(args[1], processId,
+            args.Length > 3 ? args[3] : null,
+            args.Length > 4 && args[4] == "--use-local-app-data") ? 0 : 1;
     }
 
     private static void HandleUpgrade(string upgradeData)

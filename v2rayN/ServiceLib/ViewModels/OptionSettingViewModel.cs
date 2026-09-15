@@ -49,6 +49,9 @@ public class OptionSettingViewModel : MyReactiveObject
 
     [Reactive] public bool AutoRun { get; set; }
     [Reactive] public bool EnableStatistics { get; set; }
+    [Reactive] public bool ProxyStunTraffic { get; set; }
+    [Reactive] public bool EnableUdpInterception { get; set; }
+    [Reactive] public string UdpInterceptionApplications { get; set; }
     [Reactive] public bool KeepOlderDedupl { get; set; }
     [Reactive] public bool DisplayRealTimeSpeed { get; set; }
     [Reactive] public bool EnableAutoAdjustMainLvColWidth { get; set; }
@@ -208,6 +211,9 @@ public class OptionSettingViewModel : MyReactiveObject
 
         AutoRun = _config.GuiItem.AutoRun;
         EnableStatistics = _config.GuiItem.EnableStatistics;
+        ProxyStunTraffic = _config.GuiItem.ProxyStunTraffic;
+        EnableUdpInterception = _config.GuiItem.EnableUdpInterception;
+        UdpInterceptionApplications = _config.GuiItem.UdpInterceptionApplications;
         DisplayRealTimeSpeed = _config.GuiItem.DisplayRealTimeSpeed;
         KeepOlderDedupl = _config.GuiItem.KeepOlderDedupl;
         EnableAutoAdjustMainLvColWidth = _config.UiItem.EnableAutoAdjustMainLvColWidth;
@@ -327,6 +333,21 @@ public class OptionSettingViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.FillLocalListeningPort);
             return;
         }
+        var privacyChanged = ProxyStunTraffic != _config.GuiItem.ProxyStunTraffic
+                             || EnableUdpInterception != _config.GuiItem.EnableUdpInterception
+                             || UdpInterceptionApplications != _config.GuiItem.UdpInterceptionApplications;
+        if (EnableUdpInterception)
+        {
+            try
+            {
+                ServiceLib.Services.Privacy.UdpInterceptionConfig.ParseApplications(UdpInterceptionApplications);
+            }
+            catch (ArgumentException ex)
+            {
+                NoticeManager.Instance.Enqueue(ex.Message);
+                return;
+            }
+        }
         var needReboot = EnableStatistics != _config.GuiItem.EnableStatistics
                           || DisplayRealTimeSpeed != _config.GuiItem.DisplayRealTimeSpeed
                         || EnableDragDropSort != _config.UiItem.EnableDragDropSort
@@ -398,6 +419,9 @@ public class OptionSettingViewModel : MyReactiveObject
 
         _config.GuiItem.AutoRun = AutoRun;
         _config.GuiItem.EnableStatistics = EnableStatistics;
+        _config.GuiItem.ProxyStunTraffic = ProxyStunTraffic;
+        _config.GuiItem.EnableUdpInterception = EnableUdpInterception;
+        _config.GuiItem.UdpInterceptionApplications = UdpInterceptionApplications;
         _config.GuiItem.DisplayRealTimeSpeed = DisplayRealTimeSpeed;
         _config.GuiItem.KeepOlderDedupl = KeepOlderDedupl;
         _config.UiItem.EnableAutoAdjustMainLvColWidth = EnableAutoAdjustMainLvColWidth;
@@ -454,6 +478,10 @@ public class OptionSettingViewModel : MyReactiveObject
             }
             else
             {
+                if (privacyChanged)
+                {
+                    AppEvents.ReloadRequested.Publish();
+                }
                 NoticeManager.Instance.Enqueue(needReboot ? ResUI.NeedRebootTips : ResUI.OperationSuccess);
                 _updateView?.Invoke(EViewAction.CloseWindow, null);
             }

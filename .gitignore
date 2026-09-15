@@ -4,6 +4,20 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 # User-specific files
+# Runtime state and release artifacts must never enter the source repository.
+**/guiConfigs/
+**/guiLogs/
+**/guiTemps/
+**/guiBackups/
+**/binConfigs/
+**/artifacts/
+**/TestResults/
+*.db
+*.db-shm
+*.db-wal
+*.zip
+*.sha256
+
 *.rsuser
 *.suo
 *.user

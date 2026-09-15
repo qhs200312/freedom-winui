@@ -44,6 +44,7 @@ public class MainWindowViewModel : MyReactiveObject
     public ReactiveCommand<Unit, Unit> RebootAsAdminCmd { get; }
     public ReactiveCommand<Unit, Unit> SetUwpLoopbackCmd { get; }
     public ReactiveCommand<Unit, Unit> ClearServerStatisticsCmd { get; }
+    public ReactiveCommand<Unit, Unit> UpdateGeoFilesCmd { get; }
     public ReactiveCommand<Unit, Unit> OpenTheFileLocationCmd { get; }
 
     //Presets
@@ -209,6 +210,10 @@ public class MainWindowViewModel : MyReactiveObject
         ClearServerStatisticsCmd = ReactiveCommand.CreateFromTask(async () =>
         {
             await ClearServerStatistics();
+        });
+        UpdateGeoFilesCmd = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await new UpdateService(_config, UpdateTaskHandler).UpdateGeoFileAll();
         });
         OpenTheFileLocationCmd = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -408,6 +413,15 @@ public class MainWindowViewModel : MyReactiveObject
             RefreshSubscriptions();
             await RefreshServers();
             NoticeManager.Instance.Enqueue(string.Format(ResUI.SuccessfullyImportedServerViaClipboard, ret));
+            var pastedUrls = ClipboardSubscriptionImport.GetUrls(clipboardData);
+            if (pastedUrls.Count > 0)
+            {
+                var subscriptions = ClipboardSubscriptionImport.SelectIds(pastedUrls, await AppManager.Instance.SubItems());
+                foreach (var id in subscriptions)
+                {
+                    await UpdateSubscriptionProcess(id, Enum.IsDefined(AppManager.Instance.RunningCoreType));
+                }
+            }
         }
         else
         {

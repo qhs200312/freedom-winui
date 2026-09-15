@@ -27,6 +27,7 @@ public static class SysProxyHandler
                     {
                         GetWindowsProxyString(config, port, out var strProxy, out var strExceptions);
                         ProxySettingWindows.SetProxy(strProxy, strExceptions, 2);
+                        ProxyGuardManager.RecordProxy(strProxy, null);
                         break;
                     }
                 case ESysProxyType.ForcedChange when Utils.IsLinux():
@@ -39,6 +40,7 @@ public static class SysProxyHandler
 
                 case ESysProxyType.ForcedClear when Utils.IsWindows():
                     ProxySettingWindows.UnsetProxy();
+                    ProxyGuardManager.ReleaseOwnership();
                     break;
 
                 case ESysProxyType.ForcedClear when Utils.IsLinux():
@@ -95,5 +97,6 @@ public static class SysProxyHandler
         await PacManager.Instance.StartAsync(port, portPac);
         var strProxy = $"{Global.HttpProtocol}{Global.Loopback}:{portPac}/pac?t={DateTime.Now.Ticks}";
         ProxySettingWindows.SetProxy(strProxy, "", 4);
+        ProxyGuardManager.RecordProxy(null, strProxy);
     }
 }

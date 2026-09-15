@@ -715,7 +715,7 @@
     <value>Включить мультиплексирование Mux</value>
   </data>
   <data name="TbSettingsN" xml:space="preserve">
-    <value>Настройки v2rayN</value>
+    <value>Настройки freedom</value>
   </data>
   <data name="TbSettingsPass" xml:space="preserve">
     <value>Пароль авторизации</value>
@@ -1753,7 +1753,7 @@
     <value>Общий ключ (PSK)</value>
   </data>
   <data name="menuExport2InnerUri" xml:space="preserve">
-    <value>Экспорт внутренней ссылки v2rayN в буфер обмена</value>
+    <value>Экспорт внутренней ссылки freedom в буфер обмена</value>
   </data>
   <data name="MsgCheckUpdateHasNewVersion" xml:space="preserve">
     <value>Доступна новая версия {0}: {1}</value>

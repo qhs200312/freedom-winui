@@ -147,7 +147,7 @@ public class CheckUpdateViewModel : MyReactiveObject
             var result = await updateService.CheckHasUpdateOnly(item.CoreType.Value, EnableCheckPreReleaseUpdate);
             if (result.Success && result.Version != null)
             {
-                await UpdateView(item.CoreType, string.Format(ResUI.MsgCheckUpdateHasNewVersion, item.CoreType, result.Version));
+                await UpdateView(item.CoreType, string.Format(ResUI.MsgCheckUpdateHasNewVersion, item.DisplayName, result.Version));
             }
             else
             {
@@ -271,14 +271,16 @@ public class CheckUpdateViewModel : MyReactiveObject
     {
         if (_lstUpdated.Count > 0 && _lstUpdated.Count(x => x.IsFinished == true) == _lstUpdated.Count)
         {
-            await UpdateFinishedSub(false);
+            if (!_lstUpdated.Any(item => item.IsGeoFile || !string.IsNullOrEmpty(item.FileName)))
+                return;
+            await UpdateFinishedResult(false);
             await Task.Delay(2000);
             await UpgradeCore();
 
-            if (_lstUpdated.Any(x => x.CoreType == _v2rayN && x.IsFinished == true))
+            if (_lstUpdated.Any(x => x.CoreType == _v2rayN && !string.IsNullOrEmpty(x.FileName)))
             {
                 await Task.Delay(1000);
-                await UpgradeN();
+                if (await UpgradeN()) return;
             }
             await Task.Delay(1000);
             await UpdateFinishedSub(true);
@@ -307,43 +309,49 @@ public class CheckUpdateViewModel : MyReactiveObject
         }
     }
 
-    private async Task UpgradeN()
+    private async Task<bool> UpgradeN()
     {
         try
         {
             var fileName = _lstUpdated.FirstOrDefault(x => x.CoreType == _v2rayN)?.FileName;
             if (fileName.IsNullOrEmpty())
             {
-                return;
+                return false;
             }
             if (!Utils.UpgradeAppExists(out var upgradeFileName))
             {
                 await UpdateView(_v2rayN, ResUI.UpgradeAppNotExistTip);
                 NoticeManager.Instance.SendMessageAndEnqueue(ResUI.UpgradeAppNotExistTip);
                 Logging.SaveLog("UpgradeApp does not exist");
-                return;
+                return false;
             }
 
-            var id = ProcUtils.ProcessStart(
-                upgradeFileName,
-                ["upgrade", fileName, Environment.ProcessId.ToString()],
-                Utils.StartupPath());
+            var helper = AppUpdatePreparation.PrepareHelper(upgradeFileName, Utils.GetTempPath());
+            var arguments = new List<string>
+            {
+                "upgrade", fileName, Environment.ProcessId.ToString(), Utils.GetBaseDirectory()
+            };
+            if (Environment.GetEnvironmentVariable(Global.LocalAppData) == "1")
+                arguments.Add(Global.UseLocalAppDataArgument);
+            var id = ProcUtils.ProcessStart(helper, arguments, Path.GetDirectoryName(helper));
             if (id > 0)
             {
                 await AppManager.Instance.AppExitAsync(true);
+                return true;
             }
         }
         catch (Exception ex)
         {
             await UpdateView(_v2rayN, ex.Message);
         }
+        return false;
     }
 
     private async Task UpgradeCore()
     {
         foreach (var item in _lstUpdated)
         {
-            if (item.FileName.IsNullOrEmpty() || item.IsGeoFile)
+            if (item.FileName.IsNullOrEmpty() || item.IsGeoFile || item.CoreType == _v2rayN)
             {
                 continue;
             }

@@ -27,6 +27,13 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (IsRestartLaunch(args)
+            && Environment.GetCommandLineArgs().Skip(1)
+                .Concat((args.Arguments ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .Contains(Global.UseLocalAppDataArgument, StringComparer.Ordinal))
+        {
+            Environment.SetEnvironmentVariable(Global.LocalAppData, "1");
+        }
         var instanceKey = $"v2rayN.WinUI.{Utils.GetMd5(Utils.GetExePath())}";
         ProgramStarted = new EventWaitHandle(false, EventResetMode.AutoReset, instanceKey, out var createdNew);
         if (!createdNew)
@@ -52,14 +59,16 @@ public partial class App : Application
 
         if (!AppManager.Instance.InitApp())
         {
-            _window = new Window { Content = new TextBlock { Text = "v2rayN configuration could not be loaded.", Margin = new Thickness(24) } };
+            _window = new Window { Content = new TextBlock { Text = "freedom configuration could not be loaded.", Margin = new Thickness(24) } };
             _window.Activate();
             return;
         }
 
+        ProxyGuardManager.RecoverStaleProxy();
         ClearManagedSystemProxy();
 
         AppManager.Instance.InitComponents();
+        ProxyGuardManager.Start();
         await ConfigHandler.SaveConfig(AppManager.Instance.Config);
         if (Utils.IsWindows())
         {
@@ -75,14 +84,16 @@ public partial class App : Application
         _window.Activate();
     }
 
-    private static void ClearManagedSystemProxy()
+    internal static void ClearManagedSystemProxy()
     {
         try
         {
             if (Utils.IsWindows()
-                && AppManager.Instance.Config.SystemProxyItem.SysProxyType != ESysProxyType.Unchanged)
+                && (AppManager.Instance.Config.SystemProxyItem.SysProxyType != ESysProxyType.Unchanged
+                    || ProxyGuardManager.IsCurrentOwner))
             {
                 ProxySettingWindows.UnsetProxy();
+                ProxyGuardManager.ReleaseOwnership();
             }
         }
         catch (Exception ex)

@@ -108,6 +108,15 @@ public partial class CoreConfigSingboxService
             }
             else
             {
+                if (_config.GuiItem.ProxyStunTraffic)
+                {
+                    _coreConfig.route.rules.Add(new()
+                    {
+                        network = ["udp"],
+                        action = "sniff",
+                        sniffer = ["stun"]
+                    });
+                }
                 _coreConfig.route.rules.Add(new()
                 {
                     port = [53],
@@ -121,6 +130,31 @@ public partial class CoreConfigSingboxService
                         tls_record_fragment = true,
                     });
                 }
+            }
+
+            if (_config.GuiItem.ProxyStunTraffic)
+            {
+                _coreConfig.route.rules.Add(new()
+                {
+                    type = "logical",
+                    mode = "and",
+                    outbound = Global.ProxyTag,
+                    rules =
+                    [
+                        new() { network = ["udp"] },
+                        new() { ip_cidr = [.. WebRtcRoutingPolicy.LocalNetworks], invert = true },
+                        new()
+                        {
+                            type = "logical",
+                            mode = "or",
+                            rules =
+                            [
+                                new() { protocol = ["stun"] },
+                                new() { domain = [.. WebRtcRoutingPolicy.Domains] }
+                            ]
+                        }
+                    ]
+                });
             }
 
             var hostsDomains = new List<string>();

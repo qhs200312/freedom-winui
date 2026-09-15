@@ -81,7 +81,7 @@ public sealed class WinUIPlatformService
                 return true;
 
             case EViewAction.AddServerViaClipboard:
-                if (MainViewModel is not null && GetClipboardText() is { Length: > 0 } clipboardServer)
+                if (MainViewModel is not null && await GetClipboardTextAsync() is { Length: > 0 } clipboardServer)
                 {
                     await MainViewModel.AddServerViaClipboardAsync(clipboardServer);
                 }
@@ -224,22 +224,22 @@ public sealed class WinUIPlatformService
 
     public DynamicFormView CreateSettingsView()
     {
-        return new(new OptionSettingViewModel(HandleAsync));
+        return new(new OptionSettingViewModel(HandleAsync), collapseSections: true);
     }
 
     public DynamicFormView CreateDnsView()
     {
-        return new(new DNSSettingViewModel(HandleAsync));
+        return new(new DNSSettingViewModel(HandleAsync), collapseSections: true);
     }
 
     public DynamicFormView CreateTemplateView()
     {
-        return new(new FullConfigTemplateViewModel(HandleAsync));
+        return new(new FullConfigTemplateViewModel(HandleAsync), collapseSections: true);
     }
 
     public DynamicFormView CreateHotkeyView()
     {
-        return new(new GlobalHotkeySettingViewModel(HandleAsync));
+        return new(new GlobalHotkeySettingViewModel(HandleAsync), collapseSections: true);
     }
 
     public UIElement CreateBackupView()
@@ -248,11 +248,11 @@ public sealed class WinUIPlatformService
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var bar = new CommandBar { DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsOpen = true, IsDynamicOverflowEnabled = false };
+        var bar = new CommandBar { DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsOpen = false, IsDynamicOverflowEnabled = false };
         var localBackup = new AppBarButton { Label = "本地备份", Icon = new SymbolIcon(Symbol.Save) };
         localBackup.Click += async (_, _) =>
         {
-            if (await PickSaveFileAsync("v2rayN-backup.zip", ".zip") is { } file)
+            if (await PickSaveFileAsync("freedom-backup.zip", ".zip") is { } file)
             {
                 await viewModel.LocalBackup(file);
             }
@@ -268,7 +268,7 @@ public sealed class WinUIPlatformService
         bar.PrimaryCommands.Add(localBackup);
         bar.PrimaryCommands.Add(localRestore);
         root.Children.Add(bar);
-        var form = new DynamicFormView(viewModel);
+        var form = new DynamicFormView(viewModel, collapseSections: true);
         Grid.SetRow(form, 1);
         root.Children.Add(form);
         return root;
@@ -442,6 +442,12 @@ public sealed class WinUIPlatformService
     {
         var view = Clipboard.GetContent();
         return view.Contains(StandardDataFormats.Text) ? view.GetTextAsync().AsTask().GetAwaiter().GetResult() : null;
+    }
+
+    private static async Task<string?> GetClipboardTextAsync()
+    {
+        var view = Clipboard.GetContent();
+        return view.Contains(StandardDataFormats.Text) ? await view.GetTextAsync() : null;
     }
 
     private static byte[]? CaptureDesktop()

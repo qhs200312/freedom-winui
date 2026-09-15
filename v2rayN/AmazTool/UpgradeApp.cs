@@ -1,157 +1,79 @@
 using System.Diagnostics;
-using System.IO.Compression;
-using System.Text;
 
 namespace AmazTool;
 
-internal class UpgradeApp
+internal static class UpgradeApp
 {
-    public static void Upgrade(string fileName, int? processId = null)
+    public static bool Upgrade(string fileName, int? processId = null, string? targetDirectory = null,
+        bool useLocalAppData = false)
     {
-        Console.WriteLine($"{Resx.Resource.StartUnzipping}\n{fileName}");
-
-        if (!File.Exists(fileName))
-        {
-            Console.WriteLine(Resx.Resource.UpgradeFileNotFound);
-            return;
-        }
-
-        Console.WriteLine(Resx.Resource.TryTerminateProcess);
+        var target = Path.GetFullPath(targetDirectory ?? Utils.StartupPath());
         try
         {
-            if (processId.HasValue)
+            UpdateArchiveInstaller.Install(fileName, target, () =>
             {
-                WaitForProcessExit(processId.Value);
-            }
-
-            var existing = Process.GetProcessesByName(Utils.V2rayN);
-            foreach (var pp in existing)
-            {
-                var path = pp.MainModule?.FileName ?? "";
-                if (path.StartsWith(Utils.GetPath(Utils.V2rayN)))
+                if (processId.HasValue) StopOwnedProcess(processId.Value, target);
+                foreach (var name in Utils.CompatibleAppNames)
                 {
-                    pp?.Kill();
-                    pp?.WaitForExit(1000);
+                    foreach (var process in Process.GetProcessesByName(name))
+                    {
+                        using (process)
+                        {
+                            if (IsOwnedProcess(process, target)) StopOwnedProcess(process.Id, target);
+                        }
+                    }
                 }
-            }
+            });
+            WriteResult(target, "Update installed successfully.");
+            Utils.StartApplication(target, useLocalAppData);
+            return true;
         }
         catch (Exception ex)
         {
-            // Access may be denied without admin right. The user may not be an administrator.
-            Console.WriteLine(Resx.Resource.FailedTerminateProcess + ex.StackTrace);
-        }
-
-        Console.WriteLine(Resx.Resource.StartUnzipping);
-        StringBuilder sb = new();
-        try
-        {
-            var thisAppOldFile = $"{Utils.GetExePath()}.tmp";
-            File.Delete(thisAppOldFile);
-            var startupPath = Path.GetFullPath(Utils.StartupPath());
-            var startupPrefix = startupPath.EndsWith(Path.DirectorySeparatorChar)
-                ? startupPath
-                : startupPath + Path.DirectorySeparatorChar;
-
-            using var archive = ZipFile.OpenRead(fileName);
-            foreach (var entry in archive.Entries)
+            WriteResult(target, "Update failed: " + ex);
+            Console.Error.WriteLine(ex.Message);
+            if (ex is not UpdateRollbackException)
             {
-                try
-                {
-                    if (entry.Length == 0)
-                    {
-                        continue;
-                    }
-
-                    Console.WriteLine(entry.FullName);
-
-                    var normalizedEntryName = entry.FullName.Replace('\\', '/');
-                    var lst = normalizedEntryName.Split('/', StringSplitOptions.RemoveEmptyEntries);
-                    if (lst.Length == 1)
-                    {
-                        continue;
-                    }
-
-                    var fullName = Path.Combine(lst[1..]);
-                    var entryOutputPath = Path.GetFullPath(Utils.GetPath(fullName));
-                    if (!entryOutputPath.StartsWith(startupPrefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        Console.WriteLine($"Skipped unsafe archive entry: {entry.FullName}");
-                        continue;
-                    }
-
-                    if (string.Equals(Utils.GetExePath(), entryOutputPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        File.Move(Utils.GetExePath(), thisAppOldFile);
-                    }
-
-                    Directory.CreateDirectory(Path.GetDirectoryName(entryOutputPath)!);
-                    //In the bin folder, if the file already exists, it will be skipped
-                    if (fullName.StartsWith("bin") && File.Exists(entryOutputPath))
-                    {
-                        continue;
-                    }
-
-                    TryExtractToFile(entry, entryOutputPath);
-
-                    Console.WriteLine(entryOutputPath);
-                }
-                catch (Exception ex)
-                {
-                    sb.Append(ex.StackTrace);
-                }
+                try { Utils.StartApplication(target, useLocalAppData); }
+                catch (Exception restartError) { WriteResult(target, "Restart failed: " + restartError.Message); }
             }
+            return false;
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine(Resx.Resource.FailedUpgrade + ex.StackTrace);
-            //return;
-        }
-        if (sb.Length > 0)
-        {
-            Console.WriteLine(Resx.Resource.FailedUpgrade + sb.ToString());
-            //return;
-        }
-
-        Console.WriteLine(Resx.Resource.Restartv2rayN);
-        Utils.Waiting(2);
-
-        Utils.StartV2RayN();
     }
 
-    private static void WaitForProcessExit(int processId)
+    private static bool IsOwnedProcess(Process process, string target) =>
+        Utils.CompatibleAppNames.Any(name => string.Equals(
+            process.MainModule?.FileName,
+            Path.Combine(target, OperatingSystem.IsWindows() ? name + ".exe" : name),
+            StringComparison.OrdinalIgnoreCase));
+
+    private static void StopOwnedProcess(int id, string target)
     {
         try
         {
-            using var process = Process.GetProcessById(processId);
+            using var process = Process.GetProcessById(id);
+            if (process.HasExited) return;
+            if (!IsOwnedProcess(process, target))
+                throw new InvalidOperationException("Refusing to terminate a process outside the installation.");
             if (!process.WaitForExit(15_000))
             {
                 process.Kill(true);
-                process.WaitForExit(5_000);
+                if (!process.WaitForExit(5_000)) throw new IOException("The old application did not exit.");
             }
         }
-        catch (ArgumentException)
-        {
-            // The application has already exited.
-        }
+        catch (ArgumentException) { }
     }
 
-    private static bool TryExtractToFile(ZipArchiveEntry entry, string outputPath)
+    private static void WriteResult(string target, string message)
     {
-        var retryCount = 5;
-        var delayMs = 1000;
-
-        for (var i = 1; i <= retryCount; i++)
+        try
         {
-            try
-            {
-                entry.ExtractToFile(outputPath, true);
-                return true;
-            }
-            catch
-            {
-                Thread.Sleep(delayMs * i);
-            }
+            if (!File.Exists(Path.Combine(target, "freedom.exe")) && !File.Exists(Path.Combine(target, "v2rayN.exe")))
+                return;
+            var logs = Path.Combine(target, "guiLogs");
+            Directory.CreateDirectory(logs);
+            File.AppendAllText(Path.Combine(logs, "freedom-update.log"), $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
         }
-        return false;
+        catch { }
     }
 }

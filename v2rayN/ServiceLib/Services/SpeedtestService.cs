@@ -161,7 +161,7 @@ public class SpeedtestService(Config config, Func<SpeedTestResult, Task> updateF
                 {
                     try
                     {
-                        var responseTime = await GetTcpingTime(it.Address, it.Port);
+                        var responseTime = await GetTcpingTimeAsync(it.Address, it.Port);
 
                         ProfileExManager.Instance.SetTestDelay(it.IndexId, responseTime);
                         await UpdateFunc(it.IndexId, responseTime.ToString());
@@ -476,34 +476,29 @@ public class SpeedtestService(Config config, Func<SpeedTestResult, Task> updateF
         return responseTime;
     }
 
-    private async Task<int> GetTcpingTime(string url, int port)
+    public static async Task<int> GetTcpingTimeAsync(string url, int port)
     {
-        var responseTime = -1;
-
-        if (!IPAddress.TryParse(url, out var ipAddress))
-        {
-            var ipHostInfo = await Dns.GetHostEntryAsync(url);
-            ipAddress = ipHostInfo.AddressList.First();
-        }
-
-        IPEndPoint endPoint = new(ipAddress, port);
-        using Socket clientSocket = new(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-        var timer = Stopwatch.StartNew();
         try
         {
+            if (!IPAddress.TryParse(url, out var ipAddress))
+            {
+                var ipHostInfo = await Dns.GetHostEntryAsync(url);
+                ipAddress = ipHostInfo.AddressList.First();
+            }
+
+            IPEndPoint endPoint = new(ipAddress, port);
+            using Socket clientSocket = new(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
+            var timer = Stopwatch.StartNew();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await clientSocket.ConnectAsync(endPoint, cts.Token).ConfigureAwait(false);
-            responseTime = (int)timer.ElapsedMilliseconds;
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
             timer.Stop();
+            return (int)timer.ElapsedMilliseconds;
         }
-        return responseTime;
+        catch (Exception ex) when (ex is OperationCanceledException or SocketException)
+        {
+            return -1;
+        }
     }
 
     private List<List<ServerTestItem>> GetTestBatchItem(List<ServerTestItem> lstSelected, int pageSize)

@@ -4,6 +4,7 @@ namespace ServiceLib.Models.Dto;
 public class ProfileItemModel : ReactiveObject
 {
     public bool IsActive { get; set; }
+    public string ActiveLabel => IsActive ? "主" : string.Empty;
     public string IndexId { get; set; }
     public EConfigType ConfigType { get; set; }
     public string Remarks { get; set; }

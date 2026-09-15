@@ -17,6 +17,7 @@ public record CoreConfigContext
     // TUN Compatibility
     public bool IsTunEnabled { get; init; } = false;
     public HashSet<string> ProtectDomainList { get; init; } = [];
+    public List<string> StunServerAddresses { get; init; } = [];
 
     public bool IsWindows { get; init; }
     public bool IsMacOS { get; init; }

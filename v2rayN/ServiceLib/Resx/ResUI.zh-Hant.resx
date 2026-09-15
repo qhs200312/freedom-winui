@@ -715,7 +715,7 @@
     <value>開啟 Mux 多路復用</value>
   </data>
   <data name="TbSettingsN" xml:space="preserve">
-    <value>v2rayN 設定</value>
+    <value>freedom 設定</value>
   </data>
   <data name="TbSettingsPass" xml:space="preserve">
     <value>認證密碼</value>
@@ -1756,7 +1756,7 @@
     <value>PreSharedKey</value>
   </data>
   <data name="menuExport2InnerUri" xml:space="preserve">
-    <value>匯出 v2rayN 內部分享連結至剪貼簿（多選）</value>
+    <value>匯出 freedom 內部分享連結至剪貼簿（多選）</value>
   </data>
   <data name="MsgCheckUpdateHasNewVersion" xml:space="preserve">
     <value>{0} 有新版本可用：{1}</value>

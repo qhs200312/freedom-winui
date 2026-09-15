@@ -44,12 +44,21 @@ public class DownloadService
     /// </summary>
     public async Task DownloadFileAsync(string url, string fileName, bool blProxy, int downloadTimeout)
     {
+        await DownloadFileWithResultAsync(url, fileName, blProxy, downloadTimeout);
+    }
+
+    public async Task<bool> DownloadFileWithResultAsync(string url, string fileName, bool blProxy, int downloadTimeout)
+    {
         try
         {
             UpdateCompleted?.Invoke(this, new UpdateResult(false, $"{ResUI.Downloading}   {url}"));
 
             var progress = new Progress<double>();
-            progress.ProgressChanged += (sender, value) => UpdateCompleted?.Invoke(this, new UpdateResult(value > 100, $"...{value}%"));
+            progress.ProgressChanged += (sender, value) =>
+            {
+                if (value <= 100)
+                    UpdateCompleted?.Invoke(this, new UpdateResult(false, $"...{value}%"));
+            };
 
             var webProxy = await GetWebProxy(blProxy, url);
             await DownloaderHelper.Instance.DownloadFileAsync(webProxy,
@@ -57,6 +66,10 @@ public class DownloadService
                 fileName,
                 progress,
                 downloadTimeout);
+            if (!File.Exists(fileName) || new FileInfo(fileName).Length == 0)
+                throw new IOException("Downloaded file is missing or empty.");
+            UpdateCompleted?.Invoke(this, new UpdateResult(true, fileName));
+            return true;
         }
         catch (Exception ex)
         {
@@ -68,6 +81,7 @@ public class DownloadService
                 Error?.Invoke(this, new ErrorEventArgs(ex.InnerException));
             }
         }
+        return false;
     }
 
     /// <summary>

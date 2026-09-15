@@ -60,10 +60,10 @@ public sealed class TrayIconService : IDisposable
     private void AddIcon(ESysProxyType mode)
     {
         _proxyMode = mode;
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", $"NotifyIcon{(int)mode + 1}.ico");
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", $"freedom.ico");
         if (!File.Exists(iconPath))
         {
-            iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "v2rayN.ico");
+            iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "freedom.ico");
         }
 
         _iconHandle = LoadImage(0, iconPath, 1, 32, 32, 0x10);
@@ -75,7 +75,7 @@ public sealed class TrayIconService : IDisposable
             uFlags = 0x1 | 0x2 | 0x4,
             uCallbackMessage = WmAppTray,
             hIcon = _iconHandle,
-            szTip = "v2rayN WinUI 3"
+            szTip = "freedom"
         };
         if (_iconHandle == 0 || !Shell_NotifyIcon(0, ref _iconData))
         {
@@ -91,7 +91,7 @@ public sealed class TrayIconService : IDisposable
     public void UpdateIcon(ESysProxyType mode)
     {
         _proxyMode = mode;
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", $"NotifyIcon{(int)mode + 1}.ico");
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", $"freedom.ico");
         if (!File.Exists(iconPath))
         {
             return;
@@ -116,7 +116,7 @@ public sealed class TrayIconService : IDisposable
 
     public void UpdateToolTip(string text)
     {
-        var tooltip = string.IsNullOrWhiteSpace(text) ? "v2rayN WinUI 3" : text.Trim();
+        var tooltip = string.IsNullOrWhiteSpace(text) ? "freedom" : text.Trim();
         if (tooltip.Length > 127)
         {
             tooltip = tooltip[..127];

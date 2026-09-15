@@ -17,6 +17,10 @@ public class CoreManager
     private bool _linuxSudo = false;
     private Func<bool, string, Task>? _updateFunc;
     private const string _tag = "CoreHandler";
+    private readonly ServiceLib.Services.Privacy.UdpInterceptionService _udpInterception = new();
+    public string UdpInterceptionStatus => _udpInterception.Status;
+
+    public long WorkingSet64 => (_processService?.WorkingSet64 ?? 0) + (_processPreService?.WorkingSet64 ?? 0);
 
     public async Task Init(Config config, Func<bool, string, Task> updateFunc)
     {
@@ -64,6 +68,17 @@ public class CoreManager
     /// <param name="preContext">Optional pre-socks context passed to <see cref="CoreStartPreService"/>.</param>
     public async Task LoadCore(CoreConfigContext? mainContext, CoreConfigContext? preContext)
     {
+        try
+        {
+            await LoadCoreInternal(mainContext, preContext);
+        }
+        finally
+        {
+        }
+    }
+
+    private async Task LoadCoreInternal(CoreConfigContext? mainContext, CoreConfigContext? preContext)
+    {
         if (mainContext == null)
         {
             await UpdateFunc(false, ResUI.CheckServerSettings);
@@ -72,6 +87,35 @@ public class CoreManager
 
         var node = mainContext.Node;
         var fileName = Utils.GetBinConfigPath(Global.CoreConfigFileName);
+        if (mainContext.AppConfig.GuiItem.ProxyStunTraffic
+            && mainContext.RunCoreType == ECoreType.Xray
+            && node.ConfigType != EConfigType.Custom
+            && mainContext.FullConfigTemplate is not { Enabled: true })
+        {
+            var stun = await ServiceLib.Services.CoreConfig.WebRtcRoutingPolicy.ResolveAddressesAsync();
+            mainContext = mainContext with { StunServerAddresses = stun.Addresses };
+            if (stun.FailedDomains.Count > 0)
+            {
+                await UpdateFunc(stun.Addresses.Count == 0,
+                    $"STUN 服务器地址未能全部解析：{string.Join(", ", stun.FailedDomains)}。Xray 仅能代理成功解析的端点或匹配到的域名。");
+            }
+        }
+        await CoreStop(preserveLocationProtection: true);
+
+        if (!AppManager.Instance.EnsureLocalPortsAvailable())
+        {
+            await UpdateFunc(true, "无法找到可用的本地代理端口，请修改本地监听端口后重试。");
+            return;
+        }
+
+        // The legacy TUN protection context points at the local SOCKS port.
+        // Keep it aligned when the configured port was changed automatically.
+        if (preContext?.Node is { ConfigType: EConfigType.SOCKS, Address: var address }
+            && address == Global.Loopback)
+        {
+            preContext.Node.Port = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
+        }
+
         var result = await CoreConfigHandler.GenerateClientConfig(mainContext, fileName);
         if (result.Success != true)
         {
@@ -82,7 +126,6 @@ public class CoreManager
         await UpdateFunc(false, $"{node.GetSummary()}");
         await UpdateFunc(false, $"{Utils.GetRuntimeInfo()}");
         await UpdateFunc(false, string.Format(ResUI.StartService, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")));
-        await CoreStop();
 
         if (Utils.IsWindows() && _config.TunModeItem.EnableTun)
         {
@@ -94,6 +137,25 @@ public class CoreManager
         await CoreStartPreService(preContext);
 
         AppManager.Instance.RunningCoreType = preContext?.RunCoreType ?? mainContext.RunCoreType;
+        var monitoredCore = _processService;
+        bool CoreAlive()
+        {
+            try { return monitoredCore is not null && ReferenceEquals(_processService, monitoredCore) && !monitoredCore.HasExited; }
+            catch (InvalidOperationException) { return false; }
+        }
+        await _udpInterception.StartAsync(_config, AppManager.Instance.GetLocalPort(EInboundProtocol.socks),
+            node.ConfigType != EConfigType.Custom && mainContext.FullConfigTemplate is not { Enabled: true }
+                && preContext is null && mainContext.RunCoreType is ECoreType.Xray or ECoreType.sing_box,
+            CoreAlive, UpdateFunc);
+        if (_config.GuiItem.ProxyStunTraffic && !_config.TunModeItem.EnableTun && !_config.GuiItem.EnableUdpInterception)
+        {
+            await UpdateFunc(false, "STUN 分流已配置；浏览器 UDP 需要 TUN 或额外的 UDP 接管组件。");
+        }
+        if (_config.GuiItem.ProxyStunTraffic
+            && (node.ConfigType == EConfigType.Custom || mainContext.FullConfigTemplate is { Enabled: true }))
+        {
+            await UpdateFunc(true, "自定义配置/完整模板可能覆盖 STUN 分流，请检查最终路由规则。");
+        }
 
         if (_processService != null)
         {
@@ -142,10 +204,13 @@ public class CoreManager
         return await RunProcess(coreInfo, fileName, true, false);
     }
 
-    public async Task CoreStop()
+    public Task CoreStop() => CoreStop(preserveLocationProtection: false);
+
+    private async Task CoreStop(bool preserveLocationProtection)
     {
         try
         {
+            await _udpInterception.StopAsync();
             if (_linuxSudo)
             {
                 await CoreAdminManager.Instance.KillProcessAsLinuxSudo();
@@ -171,6 +236,12 @@ public class CoreManager
         catch (Exception ex)
         {
             Logging.SaveLog(_tag, ex);
+        }
+        finally
+        {
+            if (!preserveLocationProtection)
+            {
+            }
         }
     }
 

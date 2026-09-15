@@ -1,4 +1,4 @@
-name: Release WinUI
+name: Release freedom WinUI
 
 on:
   push:
@@ -19,9 +19,11 @@ jobs:
       matrix:
         include:
           - rid: win-x64
-            package: v2rayN-windows-64
+            platform: x64
+            package: freedom-windows-64
           - rid: win-arm64
-            package: v2rayN-windows-arm64
+            platform: ARM64
+            package: freedom-windows-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +37,8 @@ jobs:
         run: |
           $version = "${{ github.ref_name }}".TrimStart('v')
           if ($version -notmatch '^\d+\.\d+\.\d+') {
-            $version = '7.23.7'
+            [xml]$props = Get-Content Directory.Build.props
+            $version = [string]($props.Project.PropertyGroup.Version | Select-Object -First 1)
           }
           $appOutput = Join-Path $env:RUNNER_TEMP "app-${{ matrix.rid }}"
           $toolOutput = Join-Path $env:RUNNER_TEMP "tool-${{ matrix.rid }}"
@@ -43,17 +46,17 @@ jobs:
 
           dotnet publish v2rayN.WinUI/v2rayN.WinUI.csproj `
             -c Release -r "${{ matrix.rid }}" --self-contained true `
-            -p:Version=$version -p:PublishSingleFile=false -warnaserror -o $appOutput
+            -p:Platform="${{ matrix.platform }}" -p:Version=$version -p:PublishSingleFile=false -warnaserror -o $appOutput
           dotnet publish AmazTool/AmazTool.csproj `
             -c Release -r "${{ matrix.rid }}" --self-contained true `
             -p:Version=$version -p:PublishSingleFile=true -warnaserror -o $toolOutput
 
           $requiredResources = @(
-            'v2rayN.pri',
+            'freedom.pri',
             'App.xbf',
             'MainWindow.xbf',
             'Views/UpdateManagerView.xbf',
-            'Assets/v2rayN.ico'
+            'Assets/freedom.ico'
           )
           foreach ($relativePath in $requiredResources) {
             if (-not (Test-Path -LiteralPath (Join-Path $appOutput $relativePath) -PathType Leaf)) {
@@ -65,6 +68,9 @@ jobs:
           Copy-Item (Join-Path $appOutput '*') $packageRoot -Recurse -Force
           Copy-Item (Join-Path $toolOutput 'AmazTool.exe') $packageRoot -Force
           Compress-Archive -Path $packageRoot -DestinationPath "${{ matrix.package }}.zip" -Force
+          $zip = "${{ matrix.package }}.zip"
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$zip.sha256", "$hash  $zip`n", [Text.UTF8Encoding]::new($false))
 
       - name: Build self-contained installer
         if: matrix.rid == 'win-x64'
@@ -73,21 +79,24 @@ jobs:
           choco install innosetup --no-progress -y
           $version = "${{ github.ref_name }}".TrimStart('v')
           if ($version -notmatch '^\d+\.\d+\.\d+') {
-            $version = '7.23.7'
+            [xml]$props = Get-Content Directory.Build.props
+            $version = [string]($props.Project.PropertyGroup.Version | Select-Object -First 1)
           }
           ./installer/build-installer.ps1 -Version $version
-          Copy-Item "artifacts/installer/v$version/output/v2rayN-windows-64-setup.exe" .
+          Copy-Item "artifacts/installer/v$version/output/freedom-windows-64-setup.exe" .
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.package }}
-          path: v2rayN/${{ matrix.package }}.zip
+          path: |
+            v2rayN/${{ matrix.package }}.zip
+            v2rayN/${{ matrix.package }}.zip.sha256
 
       - uses: actions/upload-artifact@v4
         if: matrix.rid == 'win-x64'
         with:
-          name: v2rayN-windows-64-setup
-          path: v2rayN/v2rayN-windows-64-setup.exe
+          name: freedom-windows-64-setup
+          path: v2rayN/freedom-windows-64-setup.exe
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -96,12 +105,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: v2rayN-windows-*
+          pattern: freedom-windows-*
           merge-multiple: true
 
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            v2rayN-windows-*.zip
-            v2rayN-windows-*-setup.exe
+            freedom-windows-*.zip
+            freedom-windows-*.zip.sha256
+            freedom-windows-*-setup.exe

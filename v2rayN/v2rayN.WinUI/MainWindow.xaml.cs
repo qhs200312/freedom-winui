@@ -1,6 +1,8 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reactive.Linq;
+using System.Text;
 using System.Windows.Input;
 using DynamicData.Binding;
 using Microsoft.UI;
@@ -29,23 +31,32 @@ namespace v2rayN.WinUI;
 
 public sealed partial class MainWindow : Window
 {
+    private const int MaxPendingLogChars = 100_000;
+    private const int MaxVisibleLogChars = 200_000;
+
     private readonly WinUIPlatformService _platform;
     private readonly MainWindowViewModel _mainViewModel;
     private readonly ProfilesViewModel _profilesViewModel;
     private readonly StatusBarViewModel _statusViewModel;
     private readonly MsgViewModel _msgViewModel;
     private readonly Dictionary<string, UIElement> _moduleCache = [];
+    private readonly HashSet<string> _moduleCreationPending = [];
     private readonly Queue<long> _uploadHistory = [];
     private readonly Queue<long> _downloadHistory = [];
+    private readonly object _pendingLogLock = new();
+    private readonly StringBuilder _pendingLogText = new();
+    private DispatcherQueueTimer? _logFlushTimer;
+    private TextBox? _logTextBox;
     private readonly List<IDisposable> _subscriptions = [];
     private readonly TrayIconService _trayIcon;
     private readonly OutboundIpService _outboundIpService = new();
     private readonly DispatcherTimer _dashboardTimer;
     private readonly DispatcherTimer _trafficTimer;
     private readonly DispatcherTimer _messageTimer;
-    private readonly DispatcherQueueTimer _navigationTimer;
     private List<RoutingItem> _visibleRoutingItems = [];
     private string _routingSignature = string.Empty;
+    private int _trayMenuSignature;
+    private bool _trayMenuInitialized;
     private readonly AppWindow _appWindow;
     private bool _updatingControls;
     private bool _shuttingDown;
@@ -58,22 +69,18 @@ public sealed partial class MainWindow : Window
     private ECoreType _lastRunningCoreType = (ECoreType)(-1);
     private bool? _lastCoreRunning;
     private bool _checkingOutboundIp;
+    private bool _checkingNodeLatency;
     private string _lastMessage = string.Empty;
     private DateTime _lastMessageAt;
     private string? _currentNavTag;
-    private string? _pendingNavTag;
     private bool _initializing = true;
     private bool _syncingNavSelection;
 
     public MainWindow()
     {
         InitializeComponent();
-        _navigationTimer = DispatcherQueue.CreateTimer();
-        _navigationTimer.Interval = TimeSpan.FromMilliseconds(50);
-        _navigationTimer.IsRepeating = false;
-        _navigationTimer.Tick += NavigationTimer_Tick;
         _initializing = false;
-        Title = $"{Utils.GetVersion()} · WinUI 3";
+        Title = "freedom";
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         SystemBackdrop = new MicaBackdrop();
@@ -131,7 +138,7 @@ public sealed partial class MainWindow : Window
 
         ProfilesList.ItemsSource = _profilesViewModel.ProfileItems;
         ProfileGroupCombo.ItemsSource = _profilesViewModel.SubItems;
-        MoveGroupCombo.ItemsSource = _profilesViewModel.SubItems;
+        _profilesViewModel.SubItems.CollectionChanged += (_, _) => RefreshMoveToGroupMenu();
         RoutingCombo.DisplayMemberPath = "DisplayRemarks";
         AppManager.Instance.ShowInTaskbar = true;
         if (Content is UIElement rootElement)
@@ -197,8 +204,10 @@ public sealed partial class MainWindow : Window
             _uploadHistory.Enqueue(Math.Max(0, _currentUpload));
             _downloadHistory.Enqueue(Math.Max(0, _currentDownload));
             RenderTrafficChart();
+            RefreshProcessMemory();
         };
         timer.Start();
+        RefreshProcessMemory();
         return timer;
     }
 
@@ -211,19 +220,35 @@ public sealed partial class MainWindow : Window
         ActiveServerDetailText.Text = active is null ? "请在配置项中选择活动服务器" : $"[{active.ConfigType}] {active.Address}:{active.Port}";
         var runningCoreType = AppManager.Instance.RunningCoreType;
         var coreRunning = Enum.IsDefined(runningCoreType);
-        if (runningCoreType != _lastRunningCoreType)
+        if (!_checkingNodeLatency)
+        {
+            NodeLatencyText.Text = coreRunning ? GetNodeLatencyText(active) : "未运行";
+        }
+        var coreTypeChanged = runningCoreType != _lastRunningCoreType;
+        if (coreTypeChanged)
         {
             _lastRunningCoreType = runningCoreType;
             ResetSessionTraffic();
         }
         CoreStatusText.Text = GetCoreStatusText();
+        UdpInterceptionStatusText.Text = AppManager.Instance.Config.GuiItem.EnableUdpInterception
+            ? $"UDP 接管：{CoreManager.Instance.UdpInterceptionStatus}"
+            : "UDP 接管：关闭";
         StopCoreButton.IsEnabled = coreRunning;
         ReloadCoreButtonText.Text = coreRunning ? "重启" : "启动";
         ToolTipService.SetToolTip(ReloadCoreButton, coreRunning ? "重载核心" : "启动核心");
-        if (_lastCoreRunning is null || coreRunning != _lastCoreRunning.Value)
+        var coreStateChanged = _lastCoreRunning is null || coreRunning != _lastCoreRunning.Value;
+        if (coreStateChanged)
         {
             _lastCoreRunning = coreRunning;
             _ = SyncSystemProxyWithCoreStateAsync(coreRunning);
+        }
+        if (coreRunning && (coreTypeChanged || coreStateChanged))
+        {
+            _ = RefreshNetworkStatusAfterCoreStartAsync();
+        }
+        else if (!coreRunning && coreStateChanged)
+        {
             _ = RefreshOutboundIpAsync();
         }
         UploadTotalText.Text = $"本次 {Utils.HumanFy(_sessionUpload)}";
@@ -252,13 +277,37 @@ public sealed partial class MainWindow : Window
         {
             RoutingCombo.SelectedItem = selectedRouting;
         }
-        _trayIcon.UpdateMenuItems(
-            _visibleRoutingItems.Select(item => new TrayMenuEntry(item.Id, item.DisplayRemarks)),
-            selectedRouting?.Id,
-            _statusViewModel.Servers.Select(item => new TrayMenuEntry(item.ID ?? string.Empty, item.Text ?? string.Empty)),
-            _statusViewModel.SelectedServer?.ID);
-        _trayIcon.UpdateToolTip(active?.GetSummary() ?? "v2rayN WinUI 3");
+        var trayMenuSignature = CalculateTrayMenuSignature(selectedRouting?.Id, _statusViewModel.SelectedServer?.ID);
+        if (!_trayMenuInitialized || trayMenuSignature != _trayMenuSignature)
+        {
+            _trayMenuInitialized = true;
+            _trayMenuSignature = trayMenuSignature;
+            _trayIcon.UpdateMenuItems(
+                _visibleRoutingItems.Select(item => new TrayMenuEntry(item.Id, item.DisplayRemarks)),
+                selectedRouting?.Id,
+                _statusViewModel.Servers.Select(item => new TrayMenuEntry(item.ID ?? string.Empty, item.Text ?? string.Empty)),
+                _statusViewModel.SelectedServer?.ID);
+        }
+        _trayIcon.UpdateToolTip(active?.GetSummary() ?? "freedom");
         _updatingControls = false;
+    }
+
+    private int CalculateTrayMenuSignature(string? selectedRoutingId, string? selectedServerId)
+    {
+        var hash = new HashCode();
+        hash.Add(selectedRoutingId, StringComparer.Ordinal);
+        hash.Add(selectedServerId, StringComparer.Ordinal);
+        foreach (var item in _visibleRoutingItems)
+        {
+            hash.Add(item.Id, StringComparer.Ordinal);
+            hash.Add(item.DisplayRemarks, StringComparer.Ordinal);
+        }
+        foreach (var item in _statusViewModel.Servers)
+        {
+            hash.Add(item.ID, StringComparer.Ordinal);
+            hash.Add(item.Text, StringComparer.Ordinal);
+        }
+        return hash.ToHashCode();
     }
 
     private static async Task SyncSystemProxyWithCoreStateAsync(bool coreRunning)
@@ -301,16 +350,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _pendingNavTag = tag;
-        _navigationTimer.Stop();
-        _navigationTimer.Start();
-    }
-
-    private void NavigationTimer_Tick(DispatcherQueueTimer sender, object args)
-    {
-        var tag = _pendingNavTag;
-        _pendingNavTag = null;
-        if (!_shuttingDown && tag is not null && string.Equals(ResolveNavTag(NavList.SelectedItem), tag, StringComparison.Ordinal))
+        if (!_shuttingDown)
         {
             NavigateToTag(tag);
         }
@@ -387,6 +427,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        _currentNavTag = tag;
+
         DashboardPage.Visibility = tag == "dashboard" ? Visibility.Visible : Visibility.Collapsed;
         ProfilesPage.Visibility = tag == "profiles" ? Visibility.Visible : Visibility.Collapsed;
         ModulePage.Visibility = tag is not ("dashboard" or "profiles") ? Visibility.Visible : Visibility.Collapsed;
@@ -401,7 +443,6 @@ public sealed partial class MainWindow : Window
             ShowModule(tag);
         }
 
-        _currentNavTag = tag;
     }
 
     private void ShowModule(string tag)
@@ -416,12 +457,65 @@ public sealed partial class MainWindow : Window
         };
         ModuleTitleText.Text = definition.Item1;
         ModuleSubtitleText.Text = definition.Item2;
-        if (!_moduleCache.TryGetValue(tag, out var module))
+        if (_moduleCache.TryGetValue(tag, out var module))
         {
-            module = CreateModule(tag);
-            _moduleCache[tag] = module;
+            ModuleContent.Content = module;
+            return;
         }
-        ModuleContent.Content = module;
+
+        // Keep rapid navigation responsive: expensive view trees are built only
+        // after the current navigation settles, and stale requests are skipped.
+        ModuleContent.Content = new TextBlock
+        {
+            Text = "正在加载...",
+            FontSize = 15,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        QueueModuleCreation(tag);
+    }
+
+    private void QueueModuleCreation(string tag)
+    {
+        if (_shuttingDown || _moduleCache.ContainsKey(tag) || !_moduleCreationPending.Add(tag))
+        {
+            return;
+        }
+
+        void LoadModule()
+        {
+            try
+            {
+                if (_shuttingDown || _currentNavTag != tag)
+                {
+                    return;
+                }
+
+                var created = CreateModule(tag);
+                _moduleCache[tag] = created;
+                if (_currentNavTag == tag)
+                {
+                    ModuleContent.Content = created;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to create module '{tag}': {ex}");
+                if (_currentNavTag == tag)
+                {
+                    ModuleContent.Content = CreateLoadErrorContent("功能加载失败，请重试。", () => QueueModuleCreation(tag));
+                }
+            }
+            finally
+            {
+                _moduleCreationPending.Remove(tag);
+            }
+        }
+
+        if (!DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, LoadModule))
+        {
+            LoadModule();
+        }
     }
 
     private UIElement CreateModule(string tag)
@@ -441,7 +535,7 @@ public sealed partial class MainWindow : Window
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var updateBar = new CommandBar { DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsOpen = true, IsDynamicOverflowEnabled = false };
+        var updateBar = new CommandBar { DefaultLabelPosition = CommandBarDefaultLabelPosition.Right, IsOpen = false, IsDynamicOverflowEnabled = false };
         updateBar.PrimaryCommands.Add(CreateCommandButton("更新全部", Symbol.Sync, _mainViewModel.SubUpdateCmd));
         updateBar.PrimaryCommands.Add(CreateCommandButton("通过代理更新全部", Symbol.Sync, _mainViewModel.SubUpdateViaProxyCmd));
         updateBar.PrimaryCommands.Add(CreateCommandButton("更新当前订阅", Symbol.Refresh, _mainViewModel.SubGroupUpdateCmd));
@@ -498,33 +592,190 @@ public sealed partial class MainWindow : Window
         autoRefresh.Toggled += (_, _) => _msgViewModel.AutoRefresh = autoRefresh.IsOn;
         var clear = new Button { Content = "清空" };
         var logBox = new TextBox { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, FontFamily = new FontFamily("Cascadia Mono") };
-        clear.Click += (_, _) => logBox.Text = string.Empty;
+        _logTextBox = logBox;
+        _logFlushTimer = DispatcherQueue.CreateTimer();
+        _logFlushTimer.Interval = TimeSpan.FromMilliseconds(120);
+        _logFlushTimer.IsRepeating = true;
+        _logFlushTimer.Tick += (_, _) => FlushPendingLogs();
+        _logFlushTimer.Start();
+        clear.Click += (_, _) =>
+        {
+            lock (_pendingLogLock)
+            {
+                _pendingLogText.Clear();
+            }
+            logBox.Text = string.Empty;
+        };
         controls.Children.Add(filter);
         controls.Children.Add(autoRefresh);
         controls.Children.Add(clear);
         root.Children.Add(controls);
         Grid.SetRow(logBox, 1);
         root.Children.Add(logBox);
-        _platform.LogSink = text => DispatcherQueue.TryEnqueue(() =>
+        _platform.LogSink = text =>
         {
-            logBox.Text += text;
-            logBox.SelectionStart = logBox.Text.Length;
-        });
+            lock (_pendingLogLock)
+            {
+                _pendingLogText.Append(text);
+                if (_pendingLogText.Length > MaxPendingLogChars)
+                {
+                    _pendingLogText.Remove(0, _pendingLogText.Length - MaxPendingLogChars);
+                }
+            }
+        };
         return root;
+    }
+
+    private void FlushPendingLogs()
+    {
+        if (_logTextBox is null || _currentNavTag != "logs")
+        {
+            return;
+        }
+
+        string pending;
+        lock (_pendingLogLock)
+        {
+            if (_pendingLogText.Length == 0)
+            {
+                return;
+            }
+
+            pending = _pendingLogText.ToString();
+            _pendingLogText.Clear();
+        }
+
+        var text = _logTextBox.Text + pending;
+        if (text.Length > MaxVisibleLogChars)
+        {
+            text = text[^MaxVisibleLogChars..];
+        }
+        _logTextBox.Text = text;
+        _logTextBox.SelectionStart = _logTextBox.Text.Length;
     }
 
     private UIElement CreateSettingsModule()
     {
         var tabs = new TabView { IsAddTabButtonVisible = false };
-        tabs.TabItems.Add(CreateTab("参数", _platform.CreateSettingsView()));
-        tabs.TabItems.Add(CreateTab("路由", _platform.CreateRoutingView()));
-        tabs.TabItems.Add(CreateTab("DNS", _platform.CreateDnsView()));
-        tabs.TabItems.Add(CreateTab("配置模板", _platform.CreateTemplateView()));
-        tabs.TabItems.Add(CreateTab("热键", new HotkeyEditorView(new GlobalHotkeySettingViewModel(_platform.HandleAsync), () => _trayIcon.ReloadGlobalHotkeys(AppManager.Instance.Config))));
-        tabs.TabItems.Add(CreateTab("备份还原", _platform.CreateBackupView()));
-        tabs.TabItems.Add(CreateTab("程序操作", CreateApplicationActionsPanel()));
-        tabs.TabItems.Add(CreateTab("外观", CreateThemePanel()));
+        var factories = new (string Title, Func<UIElement> Factory)[]
+        {
+            ("参数", _platform.CreateSettingsView),
+            ("路由", _platform.CreateRoutingView),
+            ("DNS", _platform.CreateDnsView),
+            ("配置模板", _platform.CreateTemplateView),
+            ("热键", () => new HotkeyEditorView(new GlobalHotkeySettingViewModel(_platform.HandleAsync), () => _trayIcon.ReloadGlobalHotkeys(AppManager.Instance.Config))),
+            ("备份还原", _platform.CreateBackupView),
+            ("程序操作", CreateApplicationActionsPanel),
+            ("外观", CreateThemePanel)
+        };
+
+        var pendingFactories = new Dictionary<TabViewItem, Func<UIElement>>();
+        var contentHosts = new Dictionary<TabViewItem, ContentControl>();
+        var loadingTabs = new HashSet<TabViewItem>();
+
+        foreach (var (title, factory) in factories)
+        {
+            // TabView caches the selected content in its presenter. Keep that
+            // object stable so deferred loading updates the visible tree.
+            var host = new ContentControl
+            {
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Stretch,
+                Content = new ProgressRing
+                {
+                    IsActive = true,
+                    Width = 24,
+                    Height = 24,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            var tab = new TabViewItem
+            {
+                Header = title,
+                IsClosable = false,
+                Content = host
+            };
+            pendingFactories[tab] = factory;
+            contentHosts[tab] = host;
+            host.Loaded += (_, _) => QueueLoadTab(tab);
+            tabs.TabItems.Add(tab);
+        }
+
+        void QueueLoadTab(TabViewItem tab)
+        {
+            if (!pendingFactories.ContainsKey(tab) || !loadingTabs.Add(tab))
+            {
+                return;
+            }
+
+            void LoadTab()
+            {
+                loadingTabs.Remove(tab);
+                if (_shuttingDown || !pendingFactories.TryGetValue(tab, out var factory))
+                {
+                    return;
+                }
+
+                try
+                {
+                    contentHosts[tab].Content = factory();
+                    pendingFactories.Remove(tab);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Failed to create settings tab '{tab.Header}': {ex}");
+                    contentHosts[tab].Content = CreateLoadErrorContent("此页面加载失败，请重试。", () => QueueLoadTab(tab));
+                }
+            }
+
+            if (!DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Normal, LoadTab))
+            {
+                LoadTab();
+            }
+        }
+
+        tabs.SelectionChanged += (_, args) =>
+        {
+            if (args.AddedItems.OfType<TabViewItem>().FirstOrDefault() is { } tab)
+            {
+                QueueLoadTab(tab);
+            }
+        };
+        tabs.Loaded += (_, _) =>
+        {
+            if (tabs.SelectedItem is TabViewItem selected)
+            {
+                QueueLoadTab(selected);
+            }
+        };
+        tabs.SelectedIndex = 0;
         return tabs;
+    }
+
+    private static UIElement CreateLoadErrorContent(string message, Action retryAction)
+    {
+        var retry = new Button
+        {
+            Content = "重新加载",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        retry.Click += (_, _) => retryAction();
+
+        var error = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 4
+        };
+        error.Children.Add(new TextBlock
+        {
+            Text = message,
+            HorizontalAlignment = HorizontalAlignment.Center
+        });
+        error.Children.Add(retry);
+        return error;
     }
 
     private UIElement CreateApplicationActionsPanel()
@@ -537,10 +788,12 @@ public sealed partial class MainWindow : Window
         appActions.ColumnDefinitions.Add(new ColumnDefinition());
         appActions.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         appActions.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        appActions.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddSettingsAction(appActions, 0, 0, "以管理员身份重启", Symbol.Sync, _mainViewModel.RebootAsAdminCmd);
         AddSettingsAction(appActions, 0, 1, "解除 UWP 回环限制", Symbol.World, _mainViewModel.SetUwpLoopbackCmd);
         AddSettingsAction(appActions, 1, 0, "清空流量统计", Symbol.Delete, _mainViewModel.ClearServerStatisticsCmd);
         AddSettingsAction(appActions, 1, 1, "打开存储目录", Symbol.OpenFile, _mainViewModel.OpenTheFileLocationCmd);
+        AddSettingsAction(appActions, 2, 0, "更新 Geo/路由规则", Symbol.Refresh, _mainViewModel.UpdateGeoFilesCmd);
         panel.Children.Add(appActions);
 
         panel.Children.Add(new TextBlock { Text = "区域预设", FontSize = 20, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 10, 0, 0) });
@@ -611,10 +864,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (Application.Current.Resources["BrandBrush"] is SolidColorBrush brush)
-            {
-                brush.Color = choice.Color;
-            }
+            ApplyAccentColor(choice.Color);
 
             config.UiItem.ColorPrimaryName = choice.Name;
             await ConfigHandler.SaveConfig(config);
@@ -665,9 +915,25 @@ public sealed partial class MainWindow : Window
             "Purple" => Windows.UI.Color.FromArgb(255, 116, 77, 169),
             _ => Windows.UI.Color.FromArgb(255, 8, 127, 134)
         };
-        if (Application.Current.Resources["BrandBrush"] is SolidColorBrush brush)
+        ApplyAccentColor(accent);
+    }
+
+    private static void ApplyAccentColor(Windows.UI.Color accent)
+    {
+        var resources = Application.Current.Resources;
+        if (resources["BrandBrush"] is SolidColorBrush brandBrush)
         {
-            brush.Color = accent;
+            brandBrush.Color = accent;
+        }
+
+        foreach (var themeName in new[] { "Light", "Dark" })
+        {
+            if (resources.ThemeDictionaries.TryGetValue(themeName, out var value)
+                && value is ResourceDictionary themeResources
+                && themeResources["AccentSoftBrush"] is SolidColorBrush softBrush)
+            {
+                softBrush.Color = accent;
+            }
         }
     }
 
@@ -767,6 +1033,83 @@ public sealed partial class MainWindow : Window
         ShowMessage("出口 IP 已复制");
     }
 
+    private async void RefreshNodeLatency_Click(object sender, RoutedEventArgs e)
+    {
+        await RefreshNodeLatencyAsync(true);
+    }
+
+    private async Task RefreshNetworkStatusAfterCoreStartAsync()
+    {
+        await Task.Delay(1000);
+        if (!Enum.IsDefined(AppManager.Instance.RunningCoreType))
+        {
+            return;
+        }
+
+        await Task.WhenAll(RefreshOutboundIpAsync(), RefreshNodeLatencyAsync(false));
+    }
+
+    private async Task RefreshNodeLatencyAsync(bool showWarnings)
+    {
+        if (_checkingNodeLatency)
+        {
+            return;
+        }
+
+        var indexId = AppManager.Instance.Config.IndexId;
+        if (indexId.IsNullOrEmpty())
+        {
+            NodeLatencyText.Text = "未选择";
+            if (showWarnings)
+            {
+                ShowMessage("请先选择活动节点", InfoBarSeverity.Warning);
+            }
+            return;
+        }
+        if (!Enum.IsDefined(AppManager.Instance.RunningCoreType))
+        {
+            NodeLatencyText.Text = "未运行";
+            if (showWarnings)
+            {
+                ShowMessage("请先启动内核", InfoBarSeverity.Warning);
+            }
+            return;
+        }
+
+        _checkingNodeLatency = true;
+        RefreshNodeLatencyButton.IsEnabled = false;
+        NodeLatencyText.Text = "检测中...";
+        try
+        {
+            var delay = await _profilesViewModel.TestServerLatencyAsync(indexId);
+            if (delay is null)
+            {
+                NodeLatencyText.Text = "不可用";
+                if (showWarnings)
+                {
+                    ShowMessage("当前活动节点不可用", InfoBarSeverity.Warning);
+                }
+            }
+            else
+            {
+                NodeLatencyText.Text = delay >= 0 ? $"{delay} ms" : "超时";
+            }
+        }
+        catch (Exception ex)
+        {
+            NodeLatencyText.Text = "检测失败";
+            if (showWarnings)
+            {
+                ShowMessage(ex.Message, InfoBarSeverity.Warning);
+            }
+        }
+        finally
+        {
+            _checkingNodeLatency = false;
+            RefreshNodeLatencyButton.IsEnabled = true;
+        }
+    }
+
     private void ProfileSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         _profilesViewModel.ServerFilter = ProfileSearchBox.Text;
@@ -780,19 +1123,43 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void MoveGroupCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void MoveToGroupMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (MoveGroupCombo.SelectedItem is ServiceLib.Models.Entities.SubItem group)
+        if (sender is FrameworkElement { Tag: SubItem group })
         {
             _profilesViewModel.MoveToGroupCmd.Execute(group).Subscribe();
         }
     }
 
-    private async void SortColumnCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void SortColumnMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (SortColumnCombo.SelectedItem is ComboBoxItem { Tag: string column })
+        if (sender is FrameworkElement { Tag: string column })
         {
             await _profilesViewModel.SortServer(column);
+        }
+    }
+
+    private void RefreshMoveToGroupMenu()
+    {
+        MoveToGroupMenu.Items.Clear();
+        foreach (var group in _profilesViewModel.SubItems.Where(item => !string.IsNullOrEmpty(item.Id)))
+        {
+            var menuItem = new MenuFlyoutItem
+            {
+                Text = group.Remarks,
+                Tag = group
+            };
+            menuItem.Click += MoveToGroupMenuItem_Click;
+            MoveToGroupMenu.Items.Add(menuItem);
+        }
+
+        if (MoveToGroupMenu.Items.Count == 0)
+        {
+            MoveToGroupMenu.Items.Add(new MenuFlyoutItem
+            {
+                Text = "无可用分组",
+                IsEnabled = false
+            });
         }
     }
 
@@ -810,6 +1177,34 @@ public sealed partial class MainWindow : Window
     {
         _profilesViewModel.SelectedProfile = ProfilesList.SelectedItem as ProfileItemModel ?? new ProfileItemModel();
         _profilesViewModel.SelectedProfiles = ProfilesList.SelectedItems.Cast<ProfileItemModel>().ToList();
+    }
+
+    private void ProfileRow_ContextRequested(object sender, Microsoft.UI.Xaml.Input.ContextRequestedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ProfileItemModel profile })
+        {
+            return;
+        }
+
+        if (!ProfilesList.SelectedItems.Contains(profile))
+        {
+            ProfilesList.SelectedItems.Clear();
+            ProfilesList.SelectedItem = profile;
+        }
+
+        _profilesViewModel.SelectedProfile = profile;
+        _profilesViewModel.SelectedProfiles = ProfilesList.SelectedItems.Cast<ProfileItemModel>().ToList();
+    }
+
+    private void ProfilesList_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter || ProfilesList.SelectedItem is not ProfileItemModel)
+        {
+            return;
+        }
+
+        ((ICommand)_profilesViewModel.SetDefaultServerCmd).Execute(null);
+        e.Handled = true;
     }
 
     private void ProfilesList_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
@@ -871,10 +1266,7 @@ public sealed partial class MainWindow : Window
         _allowClose = isEnding;
         if (isEnding)
         {
-            if (AppManager.Instance.Config.SystemProxyItem.SysProxyType != ESysProxyType.Unchanged)
-            {
-                ProxySettingWindows.UnsetProxy();
-            }
+            App.ClearManagedSystemProxy();
             return;
         }
 
@@ -1163,7 +1555,7 @@ public sealed partial class MainWindow : Window
         _dashboardTimer.Stop();
         _trafficTimer.Stop();
         _messageTimer.Stop();
-        _navigationTimer.Stop();
+        _logFlushTimer?.Stop();
         _trayIcon.Dispose();
         foreach (var subscription in _subscriptions)
         {
@@ -1181,6 +1573,52 @@ public sealed partial class MainWindow : Window
     {
         var core = AppManager.Instance.RunningCoreType;
         return Enum.IsDefined(core) ? core.ToString() : "未运行";
+    }
+
+    private void RefreshProcessMemory()
+    {
+        try
+        {
+            using var appProcess = Process.GetCurrentProcess();
+            appProcess.Refresh();
+            AppMemoryText.Text = FormatWorkingSet(appProcess.WorkingSet64);
+        }
+        catch
+        {
+            AppMemoryText.Text = "-- MB";
+        }
+
+        var coreType = AppManager.Instance.RunningCoreType;
+        CoreMemoryNameText.Text = coreType switch
+        {
+            ECoreType.Xray => "xray",
+            ECoreType.v2fly => "v2fly",
+            ECoreType.v2fly_v5 => "v2fly v5",
+            ECoreType.mihomo => "mihomo",
+            _ => "sing-box"
+        };
+        var coreWorkingSet = CoreManager.Instance.WorkingSet64;
+        CoreMemoryText.Text = coreWorkingSet > 0 ? FormatWorkingSet(coreWorkingSet) : "-- MB";
+    }
+
+    private static string FormatWorkingSet(long bytes)
+    {
+        return $"{bytes / 1024d / 1024d:0.0} MB";
+    }
+
+    private static string GetNodeLatencyText(ProfileItemModel? profile)
+    {
+        if (profile is null || profile.DelayVal.IsNullOrEmpty())
+        {
+            return "未测试";
+        }
+
+        if (int.TryParse(profile.DelayVal, out var delay))
+        {
+            return delay >= 0 ? $"{delay} ms" : "超时";
+        }
+
+        return profile.DelayVal;
     }
 
     private sealed record AccentChoice(string Name, Windows.UI.Color Color);

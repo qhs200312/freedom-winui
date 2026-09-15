@@ -28,7 +28,11 @@ internal static class CoreConfigTestFactory
                     DomainStrategy4Singbox = string.Empty,
                     RoutingIndexId = string.Empty,
                 },
-            GuiItem = new GUIItem { EnableStatistics = false, DisplayRealTimeSpeed = false, EnableLog = false },
+            GuiItem = new GUIItem
+            {
+                EnableStatistics = false, DisplayRealTimeSpeed = false, EnableLog = false,
+                ProxyStunTraffic = false
+            },
             MsgUIItem = new MsgUIItem(),
             UiItem =
                 new UIItem

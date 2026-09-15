@@ -97,6 +97,8 @@ public class CoreConfigContextBuilder
         if (context.IsTunEnabled)
         {
             var appConfig = JsonUtils.DeepCopy(config);
+            // JSON cloning omits runtime-only options needed by the dashboard.
+            appConfig.ForceRealtimeSpeed = config.ForceRealtimeSpeed;
             var routeExcludeAddressList = new List<string>();
             var routeExcludeAddressSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var addr in GetTunRouteExcludeAddresses(context.AppConfig.TunModeItem.RouteExcludeAddress))
@@ -130,6 +132,7 @@ public class CoreConfigContextBuilder
         {
             validatorResult.Warnings.Add(string.Format(ResUI.MsgInvalidProperty, ResUI.TbSettingsSendThrough));
             var appConfig = JsonUtils.DeepCopy(config);
+            appConfig.ForceRealtimeSpeed = config.ForceRealtimeSpeed;
             appConfig.CoreBasicItem.SendThrough = string.Empty;
             context = context with { AppConfig = appConfig };
         }
@@ -139,6 +142,7 @@ public class CoreConfigContextBuilder
         {
             validatorResult.Warnings.Add(string.Format(ResUI.MsgInvalidProperty, ResUI.TbSettingsBindInterface));
             var appConfig = JsonUtils.DeepCopy(config);
+            appConfig.ForceRealtimeSpeed = config.ForceRealtimeSpeed;
             appConfig.CoreBasicItem.BindInterface = string.Empty;
             context = context with { AppConfig = appConfig };
         }
@@ -268,6 +272,7 @@ public class CoreConfigContextBuilder
             && mainResult.Context.AppConfig.TunModeItem.StrictRoute)
         {
             var appConfig = JsonUtils.DeepCopy(mainResult.Context.AppConfig);
+            appConfig.ForceRealtimeSpeed = mainResult.Context.AppConfig.ForceRealtimeSpeed;
             appConfig.CoreBasicItem.BindInterface = string.Empty;
             appConfig.CoreBasicItem.SendThrough = string.Empty;
             resolvedMainResult = resolvedMainResult with
