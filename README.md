@@ -31,6 +31,10 @@ Windows Packet Filter 3.6.2.1 x64 和 VC++ 运行库。驱动安装可能短暂�
 freedom 每次启动都通过应用清单请求管理员权限，与 UDP 接管开关无关。
 Windows 仍可能显示 UAC 确认，拒绝授权则程序不启动，不会修改功能开关。
 管理员启动不会替代驱动安装，也不会绕过 Windows 授权。
+
+普通模式 UDP 接管从 7.23.8 起默认开启。启动接管前会先验证本地 SOCKS5 UDP
+关联和 Google/Cloudflare STUN 往返；链路不可用时不会启动 ProxiFyre，普通代理继续工作，
+仪表盘显示未接管原因。该回退避免驱动或节点不支持 UDP 时浏览器被接管后无法上网。
 便携版不自动安装驱动。卸载客户端不删除共享驱动和运行库。
 
 ## 工程结构
@@ -77,6 +81,9 @@ Xray 的地址集合不能保证覆盖浏览器使用其他 DNS、旧缓存或�
 维护者在新仓库推送版本标签（例如 `v7.23.9`）即可触发 Release 构建，
 生成 `freedom-windows-64.zip`、对应的 `.sha256` 和安装包。
 仓库保持私有时，客户端的匿名更新无法读取 Release；不要将个人 GitHub 令牌写入客户端。
+
+`7.23.8` 正式包包含 Xray `26.9.9`、sing-box `1.14.1` 和 Mihomo `1.19.31`。
+对应官方地址与 SHA-256 记录在 `v2rayN/installer/core-versions.json`。
 
 安装包必须来自自包含 `dotnet publish --self-contained true` 输出，不能直接打包
 `dotnet build` 目录。`installer/build-installer.ps1` 会验证主程序、退出助手的运行时声明，

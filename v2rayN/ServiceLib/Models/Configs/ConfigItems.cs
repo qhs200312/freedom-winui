@@ -67,7 +67,7 @@ public class GrpcItem
 public class GUIItem
 {
     public bool ProxyStunTraffic { get; set; } = true;
-    public bool EnableUdpInterception { get; set; }
+    public bool EnableUdpInterception { get; set; } = true;
     public string UdpInterceptionApplications { get; set; } = "chrome.exe;msedge.exe;firefox.exe;Discord.exe";
     public bool AutoRun { get; set; }
     public bool EnableStatistics { get; set; }

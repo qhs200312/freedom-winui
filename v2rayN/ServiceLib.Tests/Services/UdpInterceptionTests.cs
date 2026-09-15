@@ -47,4 +47,28 @@ public class UdpInterceptionTests
         UdpInterceptionConfig.GetPrerequisiteError(true, false, true, true, false, true).Should().NotBeNull();
         UdpInterceptionConfig.GetPrerequisiteError(true, true, true, true, false, true).Should().BeNull();
     }
+
+    [Fact]
+    public async Task ExternalProbe_ShouldAcceptFirstWorkingStunServer()
+    {
+        var targets = new List<string>();
+        var result = await UdpInterceptionService.ProbeExternalStunAsync(10808, (target, port, _) =>
+        {
+            targets.Add(target);
+            port.Should().Be(10808);
+            return target.StartsWith("stun.cloudflare.com", StringComparison.Ordinal)
+                ? Task.FromResult(TimeSpan.FromMilliseconds(80))
+                : Task.FromException<TimeSpan>(new TimeoutException());
+        });
+        result.Should().BeTrue();
+        targets.Should().Equal("stun.l.google.com:19302", "stun.cloudflare.com:3478");
+    }
+
+    [Fact]
+    public async Task ExternalProbe_ShouldFailClosedWhenNoStunServerResponds()
+    {
+        var result = await UdpInterceptionService.ProbeExternalStunAsync(10808,
+            (_, _, _) => Task.FromException<TimeSpan>(new SocketException((int)SocketError.HostUnreachable)));
+        result.Should().BeFalse();
+    }
 }

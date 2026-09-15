@@ -1,0 +1,24 @@
+{
+  "generatedAt": "2026-09-15",
+  "architecture": "win-x64",
+  "cores": [
+    {
+      "name": "Xray",
+      "version": "26.9.9",
+      "url": "https://github.com/XTLS/Xray-core/releases/download/v26.9.9/Xray-windows-64.zip",
+      "sha256": "244deaba2098c2964e49bba90df3707777e5f5f428a82d2f29604015f24beec2"
+    },
+    {
+      "name": "sing-box",
+      "version": "1.14.1",
+      "url": "https://github.com/SagerNet/sing-box/releases/download/v1.14.1/sing-box-1.14.1-windows-amd64.zip",
+      "sha256": "5197f16d492d93202dc623622149a6ed040f8eca263128f91d603f2b901baa89"
+    },
+    {
+      "name": "Mihomo",
+      "version": "1.19.31",
+      "url": "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.31/mihomo-windows-amd64-v1.19.31.zip",
+      "sha256": "38b2420799d9e7cde77ec1a19c7150dd17ca77f7fb82d9f62cb8763a307eee67"
+    }
+  ]
+}

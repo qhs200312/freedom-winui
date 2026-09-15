@@ -70,6 +70,9 @@ public sealed class UdpInterceptionService
             _status = "检查本地 UDP 入口";
             if (!await ProbeLocalUdpAsync(socksPort))
                 throw new InvalidOperationException("本地 SOCKS5 UDP ASSOCIATE 检查失败");
+            _status = "检查 STUN 代理链路";
+            if (!await ProbeExternalStunAsync(socksPort))
+                throw new InvalidOperationException("STUN UDP 代理链路不可用，已保持普通代理模式");
 
             await WriteAtomically(Path.Combine(directory, "app-config.json"), json);
             await WriteAtomically(Path.Combine(directory, "NLog.config"), CreateLoggingConfiguration());
@@ -187,6 +190,26 @@ public sealed class UdpInterceptionService
             }
             catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException) { }
             await Task.Delay(150);
+        }
+        return false;
+    }
+
+    public static async Task<bool> ProbeExternalStunAsync(int port,
+        Func<string, int, TimeSpan, Task<TimeSpan>>? probe = null)
+    {
+        probe ??= (target, socksPort, timeout) =>
+            UdpTest.UdpTestService.Create("stun").SendUdpRequestAsync(target, socksPort, timeout);
+        foreach (var target in new[] { "stun.l.google.com:19302", "stun.cloudflare.com:3478" })
+        {
+            try
+            {
+                var elapsed = await probe(target, port, TimeSpan.FromSeconds(4));
+                if (elapsed > TimeSpan.Zero && elapsed < TimeSpan.FromSeconds(4)) return true;
+            }
+            catch (Exception ex)
+            {
+                Logging.SaveLog($"UDP interception STUN probe failed for {target}: {ex.Message}");
+            }
         }
         return false;
     }

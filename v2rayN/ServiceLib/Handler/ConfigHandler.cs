@@ -12,12 +12,13 @@ public static class ConfigHandler
     public static void ApplyPrivacyDefaults(Config config)
     {
         config.GuiItem ??= new();
-        if (config.PrivacyDefaultsVersion >= 1)
+        if (config.PrivacyDefaultsVersion >= 2)
         {
             return;
         }
         config.GuiItem.ProxyStunTraffic = true;
-        config.PrivacyDefaultsVersion = 1;
+        config.GuiItem.EnableUdpInterception = true;
+        config.PrivacyDefaultsVersion = 2;
     }
 
     /// <summary>
