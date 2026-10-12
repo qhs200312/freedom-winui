@@ -12,6 +12,17 @@ public sealed class AppReleaseMetadataTests
         .GetMethod("GetAppReleaseAsync", BindingFlags.Static | BindingFlags.NonPublic)!;
 
     [Theory]
+    [InlineData("7.23.8")]
+    [InlineData("7.3.0")]
+    public async Task RenumberedRelease_ShouldBeNewerThanBothPreviousAppVersions(string currentVersion)
+    {
+        var result = await Fetch(false, Package, JsonUtils.Serialize(Release("v7.30.0", "Version numbering correction.")), []);
+        result.Success.Should().BeTrue();
+        (new SemanticVersion(currentVersion) >= result.Version!).Should().BeFalse();
+        ((AppUpdateCheckResult)result).Release.Url.Should().Be(DownloadRoot + "v7.30.0/" + Package);
+    }
+
+    [Theory]
     [InlineData("freedom-windows-64.zip")]
     [InlineData("freedom-windows-arm64.zip")]
     public async Task StableCheck_ShouldUseBrandedLatestApiOnceAndKeepBodyWithExactAsset(string package)

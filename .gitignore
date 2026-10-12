@@ -416,3 +416,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 .idea/
 *.sln.iml
+
+!docs/releases/
+!docs/releases/*.md
