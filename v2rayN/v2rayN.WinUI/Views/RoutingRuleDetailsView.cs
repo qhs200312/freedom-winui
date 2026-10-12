@@ -40,13 +40,37 @@ public sealed class RoutingRuleDetailsView : UserControl
         root.Children.Add(saveBar);
 
         var form = new StackPanel { Spacing = 12, Padding = new Thickness(8, 4, 16, 24) };
-        form.Children.Add(BuildGeneralFields());
-        form.Children.Add(BuildSelectionFields());
-        form.Children.Add(BuildMatchFields());
+        if (_viewModel.WebsiteOnly)
+        {
+            form.MaxWidth = 560;
+            form.HorizontalAlignment = HorizontalAlignment.Stretch;
+            var domains = MultilineField("域名", _viewModel, nameof(_viewModel.Domain));
+            domains.PlaceholderText = "example.com";
+            domains.ClearValue(Control.FontFamilyProperty);
+            form.Children.Add(domains);
+            form.Children.Add(BuildOutboundField("处理方式"));
+            var error = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = Application.Current.Resources.TryGetValue("SystemFillColorCriticalBrush", out var critical)
+                    && critical is Brush brush ? brush : new SolidColorBrush(Microsoft.UI.Colors.Firebrick)
+            };
+            error.SetBinding(TextBlock.TextProperty, Bind(_viewModel, nameof(_viewModel.ValidationError), BindingMode.OneWay));
+            form.Children.Add(error);
+        }
+        else
+        {
+            form.Children.Add(BuildGeneralFields());
+        }
+        if (!_viewModel.DefaultOnly && !_viewModel.WebsiteOnly)
+        {
+            form.Children.Add(BuildSelectionFields());
+            form.Children.Add(BuildMatchFields());
 
-        var autoSort = new ToggleSwitch { Header = "保存时自动排序规则内容" };
-        autoSort.SetBinding(ToggleSwitch.IsOnProperty, Bind(_viewModel, nameof(_viewModel.AutoSort), BindingMode.TwoWay));
-        form.Children.Add(autoSort);
+            var autoSort = new ToggleSwitch { Header = "保存时自动排序规则内容" };
+            autoSort.SetBinding(ToggleSwitch.IsOnProperty, Bind(_viewModel, nameof(_viewModel.AutoSort), BindingMode.TwoWay));
+            form.Children.Add(autoSort);
+        }
 
         var scroll = new ScrollViewer
         {
@@ -63,9 +87,15 @@ public sealed class RoutingRuleDetailsView : UserControl
     private Grid BuildGeneralFields()
     {
         var source = _viewModel.SelectedSource;
-        var grid = TwoColumnGrid(3);
+        var grid = TwoColumnGrid(_viewModel.DefaultOnly ? 1 : 3);
         AddField(grid, TextField("备注", source, nameof(source.Remarks)), 0, 0);
 
+        var outbound = BuildOutboundField(_viewModel.DefaultOnly ? "未匹配流量使用的节点" : "使用节点");
+        if (_viewModel.DefaultOnly)
+        {
+            AddField(grid, outbound, 0, 1);
+            return grid;
+        }
         var enabled = new ToggleSwitch { Header = "启用规则" };
         enabled.SetBinding(ToggleSwitch.IsOnProperty, Bind(source, nameof(source.Enabled), BindingMode.TwoWay));
         AddField(grid, enabled, 0, 1);
@@ -74,8 +104,6 @@ public sealed class RoutingRuleDetailsView : UserControl
         ruleType.SetBinding(ComboBox.TextProperty, Bind(_viewModel, nameof(_viewModel.RuleType), BindingMode.TwoWay));
         AddField(grid, ruleType, 1, 0);
 
-        var outbound = ComboField("出站标签", Global.OutboundTags, true);
-        outbound.SetBinding(ComboBox.TextProperty, Bind(source, nameof(source.OutboundTag), BindingMode.TwoWay));
         AddField(grid, outbound, 1, 1);
 
         AddField(grid, TextField("端口", source, nameof(source.Port)), 2, 0);
@@ -83,6 +111,22 @@ public sealed class RoutingRuleDetailsView : UserControl
         network.SetBinding(ComboBox.TextProperty, Bind(source, nameof(source.Network), BindingMode.TwoWay));
         AddField(grid, network, 2, 1);
         return grid;
+    }
+
+    private ComboBox BuildOutboundField(string header)
+    {
+        var outbound = new ComboBox
+        {
+            Header = header,
+            ItemsSource = _viewModel.OutboundChoices,
+            DisplayMemberPath = "DisplayName",
+            SelectedValuePath = "Tag",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            MinWidth = 0
+        };
+        outbound.SetBinding(ComboBox.SelectedValueProperty,
+            Bind(_viewModel.SelectedSource, nameof(_viewModel.SelectedSource.OutboundTag), BindingMode.TwoWay));
+        return outbound;
     }
 
     private Grid BuildSelectionFields()
@@ -107,7 +151,17 @@ public sealed class RoutingRuleDetailsView : UserControl
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         AddField(grid, MultilineField("域名规则", _viewModel, nameof(_viewModel.Domain)), 0, 0);
         AddField(grid, MultilineField("IP 规则", _viewModel, nameof(_viewModel.IP)), 0, 1);
-        AddField(grid, MultilineField("进程规则", _viewModel, nameof(_viewModel.Process)), 0, 2);
+        var applications = new StackPanel { Spacing = 8 };
+        applications.Children.Add(MultilineField("应用进程 / 路径（TUN）", _viewModel, nameof(_viewModel.Process)));
+        var choose = new Button
+        {
+            Content = new SymbolIcon(Symbol.OpenFile),
+            Command = _viewModel.ChooseApplicationCmd,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        ToolTipService.SetToolTip(choose, "选择应用程序");
+        applications.Children.Add(choose);
+        AddField(grid, applications, 0, 2);
         return grid;
     }
 

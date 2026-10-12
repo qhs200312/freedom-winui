@@ -6,13 +6,26 @@ public class TaskManager
     public static TaskManager Instance => _instance.Value;
     private Config _config;
     private Func<bool, string, Task>? _updateFunc;
+    private volatile bool _includeAppUpdates = true;
+    private volatile bool _coreUpdateChecksManagedExternally;
+    private int _registered;
+    public bool IncludeAppUpdates { get => _includeAppUpdates; set => _includeAppUpdates = value; }
+    public bool CoreUpdateChecksManagedExternally
+    {
+        get => _coreUpdateChecksManagedExternally;
+        set => _coreUpdateChecksManagedExternally = value;
+    }
 
     public void RegUpdateTask(Config config, Func<bool, string, Task> updateFunc)
+        => RegUpdateTask(config, updateFunc, includeAppUpdates: true);
+
+    public void RegUpdateTask(Config config, Func<bool, string, Task> updateFunc, bool includeAppUpdates)
     {
         _config = config;
         _updateFunc = updateFunc;
+        _includeAppUpdates = includeAppUpdates;
 
-        Task.Run(ScheduledTasks);
+        if (Interlocked.Exchange(ref _registered, 1) == 0) Task.Run(ScheduledTasks);
     }
 
     private async Task ScheduledTasks()
@@ -132,18 +145,19 @@ public class TaskManager
 
     private async Task UpdateTaskRunCheckUpdate()
     {
+        if (!_includeAppUpdates && _coreUpdateChecksManagedExternally) return;
         Logging.SaveLog("Execute check update");
 
         var updateService = new UpdateService(_config, async (success, msg) => await Task.CompletedTask);
 
-        var msgs = await updateService.CheckHasUpdateOnlyAll(_config.CheckUpdateItem.CheckPreReleaseUpdate);
+        var msgs = await updateService.CheckHasUpdateOnlyAll(_config.CheckUpdateItem.CheckPreReleaseUpdate, _includeAppUpdates);
         foreach (var msg in msgs)
         {
             await _updateFunc?.Invoke(false, msg);
         }
         NoticeManager.Instance.Enqueue(string.Join("\n", msgs));
 
-        if (msgs.Count > 0)
+        if (msgs.Count > 0 && _includeAppUpdates)
         {
             AppEvents.HasUpdateNotified.Publish(true);
         }

@@ -1,3 +1,5 @@
+using ServiceLib.Services.Privacy;
+
 namespace ServiceLib.Services.CoreConfig;
 
 public partial class CoreConfigV2rayService
@@ -50,6 +52,18 @@ public partial class CoreConfigV2rayService
                         inbound.listen = listen;
                     }
                 }
+            }
+
+            if (UdpInterceptionConfig.ShouldCreateInbound(context))
+            {
+                _coreConfig.inbounds.Add(new()
+                {
+                    tag = UdpInterceptionConfig.InboundTag,
+                    listen = Global.Loopback,
+                    port = AppManager.Instance.GetLocalPort(EInboundProtocol.udpInterception),
+                    protocol = nameof(EInboundProtocol.socks),
+                    settings = new() { udp = true, auth = "noauth" }
+                });
             }
 
             if (context.IsTunEnabled)

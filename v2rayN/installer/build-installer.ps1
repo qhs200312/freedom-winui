@@ -4,6 +4,8 @@ param(
     [ValidateSet('win-x64')]
     [string]$RuntimeIdentifier = 'win-x64',
     [string]$CoreArchive,
+    [string]$XrayArchive,
+    [string]$SourceRevisionId,
     [string]$UdpCacheDirectory = (Join-Path $PSScriptRoot '..\artifacts\udp-cache'),
     [string]$IsccPath
 )
@@ -22,6 +24,12 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Invalid installer version: $Version"
+}
+
+$revisionArguments = @()
+if (![string]::IsNullOrWhiteSpace($SourceRevisionId)) {
+    if ($SourceRevisionId -notmatch '^[a-f0-9]{40}$') { throw 'Invalid source revision.' }
+    $revisionArguments = @("-p:SourceRevisionId=$SourceRevisionId")
 }
 
 $workRoot = Join-Path $artifactsRoot "installer\v$Version"
@@ -49,14 +57,14 @@ New-Item -ItemType Directory -Path $publishDir, $updaterDir, $coreExtractDir, $p
 
 & dotnet publish (Join-Path $sourceRoot 'v2rayN.WinUI\v2rayN.WinUI.csproj') `
     -c Release -r $RuntimeIdentifier --self-contained true `
-    -p:Platform=x64 -p:Version=$Version -p:PublishSingleFile=false -warnaserror -o $publishDir
+    -p:Platform=x64 -p:Version=$Version -p:PublishSingleFile=false @revisionArguments -warnaserror -o $publishDir
 if ($LASTEXITCODE -ne 0) {
     throw 'WinUI publish failed.'
 }
 
 & dotnet publish (Join-Path $sourceRoot 'AmazTool\AmazTool.csproj') `
     -c Release -r $RuntimeIdentifier --self-contained true `
-    -p:Version=$Version -p:PublishSingleFile=true -warnaserror -o $updaterDir
+    -p:Version=$Version -p:PublishSingleFile=true @revisionArguments -warnaserror -o $updaterDir
 if ($LASTEXITCODE -ne 0) {
     throw 'Updater publish failed.'
 }
@@ -106,6 +114,8 @@ if ($hasSingleWrappedRoot) {
     $coreContentDir = $coreTopDirectories[0].FullName
 }
 Copy-Item (Join-Path $coreContentDir '*') $packageDir -Recurse -Force
+
+& (Join-Path $PSScriptRoot 'prepare-xray-core.ps1') -PackageDirectory $packageDir -ArchivePath $XrayArchive
 
 $mihomoDirectory = Join-Path $packageDir 'bin\mihomo'
 $mihomoSource = Join-Path $mihomoDirectory 'mihomo.exe'

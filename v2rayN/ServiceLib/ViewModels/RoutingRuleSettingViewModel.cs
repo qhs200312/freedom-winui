@@ -3,6 +3,14 @@ namespace ServiceLib.ViewModels;
 public class RoutingRuleSettingViewModel : MyReactiveObject
 {
     private List<RulesItem> _rules;
+    private Dictionary<string, string> _nodeNames = [];
+
+    public async Task LoadNodeNamesAsync()
+    {
+        _nodeNames = (await RoutingNodeSelection.LoadChoicesAsync())
+            .ToDictionary(choice => choice.Tag, choice => choice.DisplayName);
+        RefreshRulesItems();
+    }
 
     [Reactive]
     public RoutingItem SelectedRouting { get; set; }
@@ -16,6 +24,9 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
 
     public ReactiveCommand<Unit, Unit> RuleAddCmd { get; }
     public ReactiveCommand<Unit, Unit> RuleEditCmd { get; }
+    public ReactiveCommand<Unit, Unit> WebsiteAddCmd { get; }
+    public ReactiveCommand<Unit, Unit> ApplicationAddCmd { get; }
+    public ReactiveCommand<Unit, Unit> DefaultNodeCmd { get; }
     public ReactiveCommand<Unit, Unit> ImportRulesFromFileCmd { get; }
     public ReactiveCommand<Unit, Unit> ImportRulesFromClipboardCmd { get; }
     public ReactiveCommand<Unit, Unit> ImportRulesFromUrlCmd { get; }
@@ -45,6 +56,9 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         {
             await RuleEditAsync(false);
         }, canEditRemove);
+        WebsiteAddCmd = ReactiveCommand.CreateFromTask(() => AddTargetRuleAsync("网站分流", EViewAction.RoutingWebsiteRuleWindow));
+        ApplicationAddCmd = ReactiveCommand.CreateFromTask(() => AddTargetRuleAsync("应用分流"));
+        DefaultNodeCmd = ReactiveCommand.CreateFromTask(EditDefaultNodeAsync);
         ImportRulesFromFileCmd = ReactiveCommand.CreateFromTask(async () =>
         {
             await _updateView?.Invoke(EViewAction.ImportRulesFromFile, null);
@@ -91,7 +105,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
 
         SelectedSource = new();
         SelectedRouting = routingItem;
-        _rules = routingItem.Id.IsNullOrEmpty() ? [] : JsonUtils.Deserialize<List<RulesItem>>(SelectedRouting.RuleSet);
+        _rules = routingItem.Id.IsNullOrEmpty() ? [] : JsonUtils.Deserialize<List<RulesItem>>(SelectedRouting.RuleSet) ?? [];
 
         RefreshRulesItems();
     }
@@ -108,11 +122,14 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
                 Id = item.Id,
                 RuleTypeName = item.RuleType?.ToString(),
                 OutboundTag = item.OutboundTag,
+                OutboundDisplayName = item.OutboundTag is { } tag ? _nodeNames.GetValueOrDefault(tag, tag) : null,
                 Port = item.Port,
                 Network = item.Network,
                 Protocols = Utils.List2String(item.Protocol),
                 InboundTags = Utils.List2String(item.InboundTag),
-                Domains = Utils.List2String((item.Domain ?? []).Concat(item.Ip ?? []).ToList().Concat(item.Process ?? []).ToList()),
+                Domains = Utils.List2String((item.Domain ?? [])
+                    .Select(domain => RoutingRuleDetailsViewModel.IsSimpleWebsiteRule(item) ? domain[7..] : domain)
+                    .Concat(item.Ip ?? []).Concat(item.Process ?? []).ToList()),
                 Enabled = item.Enabled,
                 Remarks = item.Remarks,
             };
@@ -130,20 +147,51 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         }
         else
         {
-            item = _rules.FirstOrDefault(t => t.Id == SelectedSource?.Id);
+            item = JsonUtils.DeepCopy(_rules.FirstOrDefault(t => t.Id == SelectedSource?.Id));
             if (item is null)
             {
                 return;
             }
         }
-        if (await _updateView?.Invoke(EViewAction.RoutingRuleDetailsWindow, item) == true)
+        var action = !blNew && RoutingRuleDetailsViewModel.IsSimpleWebsiteRule(item)
+            ? EViewAction.RoutingWebsiteRuleWindow
+            : !blNew && RoutingNodeSelection.IsDefaultRule(item)
+                ? EViewAction.RoutingDefaultNodeWindow : EViewAction.RoutingRuleDetailsWindow;
+        if (await _updateView?.Invoke(action, item) == true)
         {
             if (blNew)
             {
                 _rules.Insert(0, item);
             }
+            else
+            {
+                _rules[_rules.FindIndex(rule => rule.Id == item.Id)] = item;
+            }
             RefreshRulesItems();
         }
+    }
+
+    private async Task AddTargetRuleAsync(string remarks, EViewAction action = EViewAction.RoutingRuleDetailsWindow)
+    {
+        var rule = new RulesItem { Remarks = remarks };
+        if (await _updateView?.Invoke(action, rule) == true)
+        {
+            _rules.Insert(0, rule);
+            RefreshRulesItems();
+        }
+    }
+
+    private async Task EditDefaultNodeAsync()
+    {
+        var current = _rules.FirstOrDefault(RoutingNodeSelection.IsDefaultRule);
+        var rule = current is null
+            ? new RulesItem { Remarks = "默认流量", Network = "tcp,udp" }
+            : JsonUtils.DeepCopy(current);
+        if (await _updateView?.Invoke(EViewAction.RoutingDefaultNodeWindow, rule) != true) return;
+        // Replace existing catch-all rules only when the user saves this choice.
+        _rules.RemoveAll(RoutingNodeSelection.IsDefaultRule);
+        _rules.Add(rule);
+        RefreshRulesItems();
     }
 
     public async Task RuleRemoveAsync()

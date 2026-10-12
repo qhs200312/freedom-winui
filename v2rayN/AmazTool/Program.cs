@@ -59,8 +59,7 @@ internal static class Program
         {
             // Global exception handling
             Console.WriteLine($"An error occurred: {ex.Message}");
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
+            Environment.ExitCode = 1;
         }
     }
 
@@ -98,12 +97,10 @@ internal static class Program
             return;
         }
 
-        var processId = args.Length > 2 && int.TryParse(args[2], out var parsedProcessId)
-            ? parsedProcessId
-            : (int?)null;
-        Environment.ExitCode = UpgradeApp.Upgrade(args[1], processId,
-            args.Length > 3 ? args[3] : null,
-            args.Length > 4 && args[4] == "--use-local-app-data") ? 0 : 1;
+        var options = UpdateCommandOptions.Parse(args);
+        Environment.ExitCode = UpgradeApp.Upgrade(options.PackagePath, options.ProcessId,
+            options.TargetDirectory, options.UseLocalAppData, options.RestartAfterInstall,
+            options.WaitForNormalExit, options.WaitSeconds, options.Sha256, options.ProcessStartTime) ? 0 : 1;
     }
 
     private static void HandleUpgrade(string upgradeData)

@@ -1,3 +1,5 @@
+using ServiceLib.Services.Privacy;
+
 namespace ServiceLib.Services.CoreConfig;
 
 public partial class CoreConfigSingboxService
@@ -6,6 +8,15 @@ public partial class CoreConfigSingboxService
     {
         try
         {
+            var privacyOutbound = GenRoutingUserRuleOutbound(RoutingNodeSelection.DefaultProxyReference(context));
+            if (UdpInterceptionConfig.ShouldCreateInbound(context))
+            {
+                _coreConfig.route.rules.Add(new()
+                {
+                    inbound = [UdpInterceptionConfig.InboundTag],
+                    outbound = privacyOutbound
+                });
+            }
             _coreConfig.route.final = Global.ProxyTag;
             var simpleDnsItem = context.SimpleDnsItem;
 
@@ -132,13 +143,28 @@ public partial class CoreConfigSingboxService
                 }
             }
 
+            if (context.IsTunEnabled)
+            {
+                foreach (var applicationRule in JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [])
+                {
+                    if (applicationRule.Enabled && applicationRule.RuleType != ERuleType.DNS
+                        && applicationRule.Process?.Count > 0)
+                    {
+                        var processRule = JsonUtils.DeepCopy(applicationRule);
+                        processRule.Domain = null;
+                        processRule.Ip = null;
+                        GenRoutingUserRule(processRule);
+                    }
+                }
+            }
+
             if (_config.GuiItem.ProxyStunTraffic)
             {
                 _coreConfig.route.rules.Add(new()
                 {
                     type = "logical",
                     mode = "and",
-                    outbound = Global.ProxyTag,
+                    outbound = privacyOutbound,
                     rules =
                     [
                         new() { network = ["udp"] },
@@ -266,12 +292,18 @@ public partial class CoreConfigSingboxService
                     {
                         continue;
                     }
-
-                    GenRoutingUserRule(item1);
-
-                    if (item1.Ip?.Count > 0)
+                    var item = item1;
+                    if (context.IsTunEnabled && item1.Process?.Count > 0)
                     {
-                        ipRules.Add(item1);
+                        if (!(item1.Domain?.Count > 0 || item1.Ip?.Count > 0)) continue;
+                        item = JsonUtils.DeepCopy(item1);
+                        item.Process = null;
+                    }
+                    GenRoutingUserRule(item);
+
+                    if (item.Ip?.Count > 0)
+                    {
+                        ipRules.Add(item);
                     }
                 }
             }
@@ -572,12 +604,14 @@ public partial class CoreConfigSingboxService
             return outboundTag;
         }
 
-        var node = context.AllProxiesMap.GetValueOrDefault($"remark:{outboundTag}");
+        var node = context.AllProxiesMap.GetValueOrDefault(RoutingNodeSelection.MapKey(outboundTag));
 
         if (node == null
             || (!Global.SingboxSupportConfigType.Contains(node.ConfigType)
             && !node.ConfigType.IsGroupType()))
         {
+            if (RoutingNodeSelection.TryGetIndexId(outboundTag, out _))
+                throw new InvalidOperationException($"Routing node is unavailable: {outboundTag}");
             return Global.ProxyTag;
         }
 

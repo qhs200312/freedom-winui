@@ -43,9 +43,9 @@ public class UdpInterceptionTests
     [Fact]
     public void MissingDriverOrPrivileges_ShouldNotReportReady()
     {
-        UdpInterceptionConfig.GetPrerequisiteError(true, true, true, false, false, true).Should().NotBeNull();
-        UdpInterceptionConfig.GetPrerequisiteError(true, false, true, true, false, true).Should().NotBeNull();
-        UdpInterceptionConfig.GetPrerequisiteError(true, true, true, true, false, true).Should().BeNull();
+        UdpInterceptionConfig.GetPrerequisiteError(true, true, true, false).Should().NotBeNull();
+        UdpInterceptionConfig.GetPrerequisiteError(true, false, true, true).Should().NotBeNull();
+        UdpInterceptionConfig.GetPrerequisiteError(true, true, true, true).Should().BeNull();
     }
 
     [Fact]

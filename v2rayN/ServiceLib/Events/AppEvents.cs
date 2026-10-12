@@ -8,6 +8,7 @@ public static class AppEvents
     public static readonly EventChannel<Unit> AddServerViaClipboardRequested = new();
     public static readonly EventChannel<bool> SubscriptionsUpdateRequested = new();
     public static readonly EventChannel<bool> HasUpdateNotified = new();
+    public static readonly EventChannel<UpdateStatusSnapshot> UpdateStatusChanged = new();
 
     public static readonly EventChannel<Unit> ProfilesRefreshRequested = new();
     public static readonly EventChannel<Unit> SubscriptionsRefreshRequested = new();

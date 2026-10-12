@@ -79,6 +79,110 @@ public sealed class AppUpdateTests : IDisposable
     }
 
     [Fact]
+    public void InstallerChecksum_ShouldRejectModifiedPackageBeforeWaitingOrWriting()
+    {
+        var archive = CreatePackage("", []);
+        var checksum = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(archive)));
+        File.AppendAllText(archive, "modified");
+        var waited = false;
+        var apply = () => UpdateArchiveInstaller.Install(archive, Target, () => waited = true, expectedSha256: checksum);
+        apply.Should().Throw<InvalidDataException>();
+        waited.Should().BeFalse();
+        File.ReadAllText(Path.Combine(Target, "freedom.exe")).Should().Be("old-launcher");
+    }
+
+    [Fact]
+    public void VerifiedInstaller_ShouldPreserveConfigurationAndRollbackOnFailure()
+    {
+        Write("guiConfigs/guiNConfig.json", "settings");
+        var archive = CreatePackage("", [("guiConfigs/guiNConfig.json", "bad")]);
+        var checksum = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(archive)));
+        var apply = () => UpdateArchiveInstaller.Install(archive, Target, beforeWrite: file =>
+        {
+            if (file == "freedom.exe") throw new IOException("failure after DLL replacement");
+        }, expectedSha256: checksum);
+        apply.Should().Throw<IOException>();
+        File.ReadAllText(Path.Combine(Target, "guiConfigs/guiNConfig.json")).Should().Be("settings");
+        File.ReadAllText(Path.Combine(Target, "freedom.dll")).Should().Be("old-application");
+    }
+
+    [Fact]
+    public void NormalExitWait_ShouldTimeoutWithoutTerminatingRunningProcess()
+    {
+        using var process = Process.GetCurrentProcess();
+        var wait = () => UpdateProcessWaiter.Wait(process, 1, _ => true, process.StartTime.ToUniversalTime().Ticks);
+        wait.Should().Throw<TimeoutException>();
+        process.HasExited.Should().BeFalse();
+        var otherInstallation = () => UpdateProcessWaiter.Wait(process, 1, _ => false);
+        otherInstallation.Should().Throw<InvalidOperationException>();
+        var reusedId = () => UpdateProcessWaiter.Wait(process, 1, _ => true, 1);
+        reusedId.Should().Throw<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData("--no-restart")]
+    [InlineData("--wait-for-normal-exit")]
+    public void NormalExitOptions_ShouldRequireChecksum(string flag)
+    {
+        var parse = () => UpdateCommandOptions.Parse(["upgrade", "package.zip", "123", Target, flag]);
+        parse.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void HelperOptions_ShouldPreserveLegacyRestartDefaultAndRejectUnboundedWait()
+    {
+        var legacy = UpdateCommandOptions.Parse(["upgrade", "package.zip", "123", Target, "--use-local-app-data"]);
+        legacy.RestartAfterInstall.Should().BeTrue();
+        legacy.WaitForNormalExit.Should().BeFalse();
+        legacy.UseLocalAppData.Should().BeTrue();
+        var unbounded = () => UpdateCommandOptions.Parse(["upgrade", "package.zip", "123", Target, "--wait-seconds", "999999"]);
+        unbounded.Should().Throw<ArgumentException>();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NormalExitInstaller_ShouldApplyVerifiedPackageAndHonorRestartChoice(bool restart)
+    {
+        Write("guiConfigs/guiNConfig.json", "user settings");
+        var archive = CreatePackage("", [("guiConfigs/guiNConfig.json", "package settings")]);
+        var checksum = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(archive)));
+        var restarts = 0;
+        // This deliberately absent PID models an app that completed its normal exit.
+        UpgradeApp.Upgrade(archive, int.MaxValue, Target, restartAfterInstall: restart,
+            waitForNormalExit: true, expectedSha256: checksum,
+            restartApplication: (_, _) => restarts++).Should().BeTrue();
+        restarts.Should().Be(restart ? 1 : 0);
+        File.ReadAllText(Path.Combine(Target, "freedom.dll")).Should().Be("new-freedom.dll");
+        File.ReadAllText(Path.Combine(Target, "guiConfigs/guiNConfig.json")).Should().Be("user settings");
+    }
+
+    [Fact]
+    public void NoRestartFailure_ShouldPreserveOldFilesAndNeverRelaunch()
+    {
+        var archive = CreatePackage("", []);
+        var restarts = 0;
+        UpgradeApp.Upgrade(archive, int.MaxValue, Target, restartAfterInstall: false,
+            expectedSha256: new string('0', 64),
+            restartApplication: (_, _) => restarts++).Should().BeFalse();
+        restarts.Should().Be(0);
+        File.ReadAllText(Path.Combine(Target, "freedom.dll")).Should().Be("old-application");
+    }
+
+    [Fact]
+    public void VerifiedPackage_ShouldStayLockedUntilInstallationCompletes()
+    {
+        var archive = CreatePackage("", []);
+        var checksum = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(archive)));
+        UpdateArchiveInstaller.Install(archive, Target, () =>
+        {
+            var tamper = () => File.AppendAllText(archive, "tamper");
+            tamper.Should().Throw<IOException>();
+        }, expectedSha256: checksum);
+        File.ReadAllText(Path.Combine(Target, "freedom.dll")).Should().Be("new-freedom.dll");
+    }
+
+    [Fact]
     public void FrameworkDependentPackage_ShouldBeRejected()
     {
         var archive = CreatePackage("", [], frameworkDependent: true);

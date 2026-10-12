@@ -9,5 +9,6 @@ public enum EInboundProtocol
     api,
     api2,
     mixed,
+    udpInterception,
     speedtest = 21
 }

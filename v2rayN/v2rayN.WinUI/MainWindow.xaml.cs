@@ -21,6 +21,7 @@ using ServiceLib.Handler.SysProxy;
 using ServiceLib.Manager;
 using ServiceLib.Models.Dto;
 using ServiceLib.Models.Entities;
+using ServiceLib.Services;
 using ServiceLib.ViewModels;
 using v2rayN.WinUI.Services;
 using v2rayN.WinUI.Views;
@@ -33,6 +34,7 @@ public sealed partial class MainWindow : Window
 {
     private const int MaxPendingLogChars = 100_000;
     private const int MaxVisibleLogChars = 200_000;
+    private const int TrafficHistoryCapacity = 63;
 
     private readonly WinUIPlatformService _platform;
     private readonly MainWindowViewModel _mainViewModel;
@@ -52,7 +54,9 @@ public sealed partial class MainWindow : Window
     private readonly OutboundIpService _outboundIpService = new();
     private readonly DispatcherTimer _dashboardTimer;
     private readonly DispatcherTimer _trafficTimer;
+    private readonly TrafficChartWindowController _trafficAnimation;
     private readonly DispatcherTimer _messageTimer;
+    private readonly WinUIUpdateController _updates;
     private List<RoutingItem> _visibleRoutingItems = [];
     private string _routingSignature = string.Empty;
     private int _trayMenuSignature;
@@ -69,12 +73,16 @@ public sealed partial class MainWindow : Window
     private ECoreType _lastRunningCoreType = (ECoreType)(-1);
     private bool? _lastCoreRunning;
     private bool _checkingOutboundIp;
+    private OutboundIpResult? _lastOutboundIpResult;
+    private string _lastDiagnosticsRoute = string.Empty;
+    private readonly CancellationTokenSource _diagnosticsLifetime = new();
     private bool _checkingNodeLatency;
     private string _lastMessage = string.Empty;
     private DateTime _lastMessageAt;
     private string? _currentNavTag;
     private bool _initializing = true;
     private bool _syncingNavSelection;
+    private long _lastTrafficSampleAt = Stopwatch.GetTimestamp();
 
     public MainWindow()
     {
@@ -101,7 +109,7 @@ public sealed partial class MainWindow : Window
         };
 
         _msgViewModel = new MsgViewModel(_platform.HandleAsync);
-        _mainViewModel = new MainWindowViewModel(_platform.HandleAsync, forceRealtimeSpeed: true);
+        _mainViewModel = new MainWindowViewModel(_platform.HandleAsync, forceRealtimeSpeed: true, includeAppUpdates: false);
         _profilesViewModel = new ProfilesViewModel(_platform.HandleAsync);
         _statusViewModel = new StatusBarViewModel(_platform.HandleAsync);
         _platform.MainViewModel = _mainViewModel;
@@ -148,6 +156,7 @@ public sealed partial class MainWindow : Window
 
         SubscribeToApplicationEvents();
         _trafficTimer = InitializeTrafficChart();
+        _trafficAnimation = new(this, _appWindow, MainTrafficGraph, () => DashboardPage.Visibility == Visibility.Visible);
         Closed += MainWindow_Closed;
         SelectNavItem("dashboard");
         NavigateToTag("dashboard");
@@ -168,6 +177,19 @@ public sealed partial class MainWindow : Window
             _messageTimer.Stop();
             MessageBar.IsOpen = false;
         };
+        _updates = new WinUIUpdateController(this, UpdateNotifications, new AppUpdateService(AppManager.Instance.Config),
+            () => !_platform.IsDialogOpen && AppManager.Instance.ShowInTaskbar,
+            ExitApplicationAsync, () => NavigateToTag("updates"), _mainViewModel.Reload);
+        _platform.CheckApplicationUpdateAsync = () => _updates.CheckForAppUpdateAsync();
+        _platform.ApplicationUpdateStatus = () => _updates.ApplicationStatus;
+        _platform.ComponentUpdateStatuses = () => _updates.ComponentStatuses;
+        var updateCheckStarted = false;
+        ((FrameworkElement)Content).Loaded += async (_, _) =>
+        {
+            if (updateCheckStarted) return;
+            updateCheckStarted = true;
+            await _updates.CheckOnStartupAsync();
+        };
     }
 
     private void SubscribeToApplicationEvents()
@@ -177,10 +199,23 @@ public sealed partial class MainWindow : Window
         _subscriptions.Add(AppEvents.SendSnackMsgRequested.AsObservable().Subscribe(message =>
             DispatcherQueue.TryEnqueue(() => ShowMessage(message))));
         _subscriptions.Add(AppEvents.ReloadRequested.AsObservable().Subscribe(_ =>
-            DispatcherQueue.TryEnqueue(ResetSessionTraffic)));
-        _subscriptions.Add(AppEvents.ShutdownRequested.AsObservable().Subscribe(_ =>
             DispatcherQueue.TryEnqueue(() =>
             {
+                NetworkDiagnosticsRoute.Invalidate();
+                InvalidateDiagnostics();
+                ResetSessionTraffic();
+            })));
+        // This event is published after the core reload finishes, including when its stopped interval was too short to poll.
+        _subscriptions.Add(AppEvents.TestServerRequested.AsObservable().Subscribe(_ =>
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                NetworkDiagnosticsRoute.Invalidate();
+                InvalidateDiagnostics();
+            })));
+        _subscriptions.Add(AppEvents.ShutdownRequested.AsObservable().Subscribe(_ =>
+            DispatcherQueue.TryEnqueue(async () =>
+            {
+                await _updates.PrepareForExitAsync();
                 _shuttingDown = true;
                 _allowClose = true;
                 Close();
@@ -190,7 +225,7 @@ public sealed partial class MainWindow : Window
 
     private DispatcherTimer InitializeTrafficChart()
     {
-        for (var index = 0; index < 60; index++)
+        for (var index = 0; index < TrafficHistoryCapacity; index++)
         {
             _uploadHistory.Enqueue(0);
             _downloadHistory.Enqueue(0);
@@ -203,16 +238,16 @@ public sealed partial class MainWindow : Window
             _downloadHistory.Dequeue();
             _uploadHistory.Enqueue(Math.Max(0, _currentUpload));
             _downloadHistory.Enqueue(Math.Max(0, _currentDownload));
+            _lastTrafficSampleAt = Stopwatch.GetTimestamp();
             RenderTrafficChart();
-            RefreshProcessMemory();
         };
         timer.Start();
-        RefreshProcessMemory();
         return timer;
     }
 
     private void RefreshDashboard()
     {
+        if (_lastDiagnosticsRoute != NetworkDiagnosticsRoute.Identity) InvalidateDiagnostics();
         _updatingControls = true;
         var active = _profilesViewModel.ProfileItems.FirstOrDefault(item => item.IndexId == AppManager.Instance.Config.IndexId);
         ActiveServerText.Text = active?.Remarks ?? "未选择服务器";
@@ -320,9 +355,9 @@ public sealed partial class MainWindow : Window
         var configuredLanguage = AppManager.Instance.Config.UiItem.CurrentLanguage;
         var language = configuredLanguage.IsNotEmpty() ? configuredLanguage : CultureInfo.CurrentUICulture.Name;
         IEnumerable<RoutingItem> visible = language.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
-            ? _statusViewModel.RoutingItems.Where(item => item.Remarks.StartsWith("V4-", StringComparison.OrdinalIgnoreCase))
+            ? _statusViewModel.RoutingItems.Where(item => !item.Remarks.StartsWith("RUv1-", StringComparison.OrdinalIgnoreCase))
             : language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)
-                ? _statusViewModel.RoutingItems.Where(item => item.Remarks.StartsWith("RUv1-", StringComparison.OrdinalIgnoreCase))
+                ? _statusViewModel.RoutingItems.Where(item => !item.Remarks.StartsWith("V4-", StringComparison.OrdinalIgnoreCase))
                 : _statusViewModel.RoutingItems.Where(item => !item.Remarks.StartsWith("RUv1-", StringComparison.OrdinalIgnoreCase));
 
         var items = visible.ToList();
@@ -437,6 +472,7 @@ public sealed partial class MainWindow : Window
         DashboardPage.Opacity = 1;
         ProfilesPage.Opacity = 1;
         ModulePage.Opacity = 1;
+        _trafficAnimation.Refresh();
 
         if (ModulePage.Visibility == Visibility.Visible)
         {
@@ -451,7 +487,8 @@ public sealed partial class MainWindow : Window
         {
             "subscriptions" => ("订阅管理", "添加、编辑、删除、分享和更新订阅"),
             "logs" => ("运行日志", "实时核心日志、自动刷新和正则筛选"),
-            "updates" => ("组件更新", "检查或更新 GUI、核心和地理数据"),
+            "updates" => ("组件更新", "软件版本与核心组件"),
+            "unlock" => ("解锁测试", "当前代理路由"),
             "settings" => ("设置", "网络、核心、数据维护和界面选项"),
             _ => ("功能", string.Empty)
         };
@@ -525,6 +562,7 @@ public sealed partial class MainWindow : Window
             "subscriptions" => CreateSubscriptionModule(),
             "logs" => CreateLogsModule(),
             "updates" => _platform.CreateUpdateView(),
+            "unlock" => new ServiceAvailabilityView(),
             "settings" => CreateSettingsModule(),
             _ => new TextBlock { Text = "没有可用内容" }
         };
@@ -1002,17 +1040,28 @@ public sealed partial class MainWindow : Window
         OutboundIpProgress.IsActive = true;
         RefreshOutboundIpButton.IsEnabled = false;
         CopyOutboundIpButton.IsEnabled = false;
+        OutboundIpDetailsButton.IsEnabled = false;
+        _lastOutboundIpResult = null;
+        OutboundCountryFlag.SetCountry(null);
         OutboundIpText.Text = "检测中...";
         OutboundIpDetailText.Text = "正在通过当前网络路径查询";
+        var route = NetworkDiagnosticsRoute.Identity;
         try
         {
-            var result = await _outboundIpService.DetectAsync();
+            var result = await _outboundIpService.DetectAsync(_diagnosticsLifetime.Token);
+            if (_shuttingDown || route != NetworkDiagnosticsRoute.Identity) return;
+            _lastOutboundIpResult = result;
             OutboundIpText.Text = result.Ip;
             OutboundIpDetailText.Text = result.LocationText;
+            OutboundCountryFlag.SetCountry(result.Details.CountryCode);
+            ToolTipService.SetToolTip(OutboundIpDetailText, result.Route);
+            OutboundIpDetailsButton.IsEnabled = true;
             CopyOutboundIpButton.IsEnabled = true;
         }
+        catch (OperationCanceledException) when (_diagnosticsLifetime.IsCancellationRequested) { }
         catch (Exception ex)
         {
+            if (_shuttingDown || route != NetworkDiagnosticsRoute.Identity) return;
             OutboundIpText.Text = "检测失败";
             OutboundIpDetailText.Text = "检查网络或 IP API 后重试";
             ShowMessage(ex.Message, InfoBarSeverity.Warning);
@@ -1022,7 +1071,28 @@ public sealed partial class MainWindow : Window
             _checkingOutboundIp = false;
             OutboundIpProgress.IsActive = false;
             RefreshOutboundIpButton.IsEnabled = true;
+            if (!_shuttingDown && route != NetworkDiagnosticsRoute.Identity) _ = RefreshOutboundIpAsync();
         }
+    }
+
+    private void InvalidateDiagnostics()
+    {
+        _lastDiagnosticsRoute = NetworkDiagnosticsRoute.Identity;
+        _lastOutboundIpResult = null;
+        OutboundIpText.Text = "--";
+        OutboundIpDetailText.Text = "等待检测";
+        OutboundCountryFlag.SetCountry(null);
+        CopyOutboundIpButton.IsEnabled = false;
+        OutboundIpDetailsButton.IsEnabled = false;
+        if (_moduleCache.TryGetValue("unlock", out var view) && view is ServiceAvailabilityView availability)
+            availability.Invalidate();
+        if (!_shuttingDown) _ = RefreshOutboundIpAsync();
+    }
+
+    private async void OutboundIpDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastOutboundIpResult is { } result)
+            await _platform.ShowDiagnosticDialogAsync("IP 信息", new OutboundIpDetailsView(result));
     }
 
     private void CopyOutboundIp_Click(object sender, RoutedEventArgs e)
@@ -1179,21 +1249,22 @@ public sealed partial class MainWindow : Window
         _profilesViewModel.SelectedProfiles = ProfilesList.SelectedItems.Cast<ProfileItemModel>().ToList();
     }
 
-    private void ProfileRow_ContextRequested(object sender, Microsoft.UI.Xaml.Input.ContextRequestedEventArgs e)
+    private MenuFlyout ProfileContextMenu => (MenuFlyout)((FrameworkElement)Content).Resources["ProfileContextMenu"];
+
+    private void ProfilesList_ContextRequested(object sender, Microsoft.UI.Xaml.Input.ContextRequestedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: ProfileItemModel profile })
-        {
-            return;
-        }
+        Point? position = e.TryGetPosition(ProfilesList, out var point) ? point : null;
+        e.Handled = ProfileContextMenuHelper.TryShow(
+            ProfilesList, ProfileContextMenu, e.OriginalSource as DependencyObject, position, profile =>
+            {
+                _profilesViewModel.SelectedProfile = profile;
+                _profilesViewModel.SelectedProfiles = ProfilesList.SelectedItems.Cast<ProfileItemModel>().ToList();
+            });
+    }
 
-        if (!ProfilesList.SelectedItems.Contains(profile))
-        {
-            ProfilesList.SelectedItems.Clear();
-            ProfilesList.SelectedItem = profile;
-        }
-
-        _profilesViewModel.SelectedProfile = profile;
-        _profilesViewModel.SelectedProfiles = ProfilesList.SelectedItems.Cast<ProfileItemModel>().ToList();
+    private void ProfilesList_ContextCanceled(UIElement sender, RoutedEventArgs e)
+    {
+        ProfileContextMenu.Hide();
     }
 
     private void ProfilesList_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -1253,6 +1324,12 @@ public sealed partial class MainWindow : Window
 
     private async void ExitApplication()
     {
+        await ExitApplicationAsync();
+    }
+
+    private async Task ExitApplicationAsync()
+    {
+        await _updates.PrepareForExitAsync();
         _shuttingDown = true;
         _allowClose = true;
         await SysProxyHandler.UpdateSysProxy(AppManager.Instance.Config, true);
@@ -1407,11 +1484,15 @@ public sealed partial class MainWindow : Window
         _sessionDownload = 0;
         _uploadHistory.Clear();
         _downloadHistory.Clear();
-        for (var index = 0; index < 60; index++)
+        for (var index = 0; index < TrafficHistoryCapacity; index++)
         {
             _uploadHistory.Enqueue(0);
             _downloadHistory.Enqueue(0);
         }
+        _lastTrafficSampleAt = Stopwatch.GetTimestamp();
+        UploadSpeedText.Text = "0 B/s";
+        DownloadSpeedText.Text = "0 B/s";
+        RenderTrafficChart();
     }
 
     private void TrafficCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1444,6 +1525,15 @@ public sealed partial class MainWindow : Window
 
     private void RenderTrafficChart()
     {
+        if (_uploadHistory.Count == 0 || _downloadHistory.Count == 0) return;
+        var uploads = _uploadHistory.ToArray();
+        var downloads = _downloadHistory.ToArray();
+        var sampleAge = Stopwatch.GetElapsedTime(_lastTrafficSampleAt);
+        // Statistics are stored in KB; keep the minimum scale at 1 KB/s.
+        var maximum = Math.Max(1, Math.Max(uploads.Max(), downloads.Max()));
+        var niceMaximum = NiceCeiling(maximum);
+        MainTrafficGraph.UpdateSeries(uploads, downloads, niceMaximum, sampleAge);
+
         var width = TrafficCanvas.ActualWidth;
         var height = TrafficCanvas.ActualHeight;
         if (width <= 1 || height <= 1)
@@ -1462,9 +1552,6 @@ public sealed partial class MainWindow : Window
         AxisMiddle.Y1 = AxisMiddle.Y2 = topPadding + plotHeight / 2;
         AxisTop.Y1 = AxisTop.Y2 = topPadding;
 
-        var maximum = Math.Max(1024, Math.Max(_uploadHistory.Max(), _downloadHistory.Max()));
-        var niceMaximum = NiceCeiling(maximum);
-
         YAxisTopLabel.Text = $"{Utils.HumanFy(niceMaximum)}/s";
         YAxisMidLabel.Text = $"{Utils.HumanFy(niceMaximum / 2)}/s";
         YAxisBottomLabel.Text = "0 B/s";
@@ -1472,47 +1559,19 @@ public sealed partial class MainWindow : Window
         XAxisMidLabel.Text = "-30s";
         XAxisRightLabel.Text = "现在";
 
-        UploadLine.Points = BuildPoints(_uploadHistory, width, height, niceMaximum, topPadding, bottomPadding);
-        DownloadLine.Points = BuildPoints(_downloadHistory, width, height, niceMaximum, topPadding, bottomPadding);
     }
 
     private static long NiceCeiling(long value)
     {
-        if (value <= 1024)
+        if (value <= 1)
         {
-            return 1024;
+            return 1;
         }
         // Round up to a clean magnitude so axis labels stay readable.
         var magnitude = Math.Pow(10, Math.Floor(Math.Log10(value)));
         var normalized = value / magnitude;
         var nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
         return (long)Math.Ceiling(nice * magnitude);
-    }
-
-    private static PointCollection BuildPoints(
-        IEnumerable<long> values,
-        double width,
-        double height,
-        long maximum,
-        double topPadding,
-        double bottomPadding)
-    {
-        var items = values.ToArray();
-        var points = new PointCollection();
-        if (items.Length == 0 || maximum <= 0)
-        {
-            return points;
-        }
-
-        var plotHeight = Math.Max(1, height - topPadding - bottomPadding);
-        var lastIndex = Math.Max(1, items.Length - 1);
-        for (var index = 0; index < items.Length; index++)
-        {
-            var x = width * index / lastIndex;
-            var y = height - bottomPadding - plotHeight * Math.Clamp(items[index] / (double)maximum, 0, 1);
-            points.Add(new Point(x, y));
-        }
-        return points;
     }
 
     private async Task RunOperationAsync(Func<Task> operation)
@@ -1541,12 +1600,7 @@ public sealed partial class MainWindow : Window
         MessageBar.Severity = severity;
         MessageBar.IsOpen = true;
         _messageTimer.Stop();
-        _messageTimer.Interval = severity switch
-        {
-            InfoBarSeverity.Error => TimeSpan.FromSeconds(7),
-            InfoBarSeverity.Warning => TimeSpan.FromSeconds(5),
-            _ => TimeSpan.FromSeconds(3)
-        };
+        _messageTimer.Interval = TimeSpan.FromSeconds(10);
         _messageTimer.Start();
     }
 
@@ -1554,9 +1608,12 @@ public sealed partial class MainWindow : Window
     {
         _dashboardTimer.Stop();
         _trafficTimer.Stop();
+        _trafficAnimation.Dispose();
         _messageTimer.Stop();
         _logFlushTimer?.Stop();
         _trayIcon.Dispose();
+        _updates.Dispose();
+        _diagnosticsLifetime.Cancel();
         foreach (var subscription in _subscriptions)
         {
             subscription.Dispose();
@@ -1573,37 +1630,6 @@ public sealed partial class MainWindow : Window
     {
         var core = AppManager.Instance.RunningCoreType;
         return Enum.IsDefined(core) ? core.ToString() : "未运行";
-    }
-
-    private void RefreshProcessMemory()
-    {
-        try
-        {
-            using var appProcess = Process.GetCurrentProcess();
-            appProcess.Refresh();
-            AppMemoryText.Text = FormatWorkingSet(appProcess.WorkingSet64);
-        }
-        catch
-        {
-            AppMemoryText.Text = "-- MB";
-        }
-
-        var coreType = AppManager.Instance.RunningCoreType;
-        CoreMemoryNameText.Text = coreType switch
-        {
-            ECoreType.Xray => "xray",
-            ECoreType.v2fly => "v2fly",
-            ECoreType.v2fly_v5 => "v2fly v5",
-            ECoreType.mihomo => "mihomo",
-            _ => "sing-box"
-        };
-        var coreWorkingSet = CoreManager.Instance.WorkingSet64;
-        CoreMemoryText.Text = coreWorkingSet > 0 ? FormatWorkingSet(coreWorkingSet) : "-- MB";
-    }
-
-    private static string FormatWorkingSet(long bytes)
-    {
-        return $"{bytes / 1024d / 1024d:0.0} MB";
     }
 
     private static string GetNodeLatencyText(ProfileItemModel? profile)

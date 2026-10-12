@@ -31,6 +31,10 @@ public sealed class WinUIPlatformService
     public ProfilesViewModel? ProfilesViewModel { get; set; }
     public Action? FocusProfiles { get; set; }
     public Action<string>? ShowMessage { get; set; }
+    public Func<Task>? CheckApplicationUpdateAsync { get; set; }
+    public Func<UpdateStatusSnapshot>? ApplicationUpdateStatus { get; set; }
+    public Func<IReadOnlyList<UpdateStatusSnapshot>>? ComponentUpdateStatuses { get; set; }
+    public bool IsDialogOpen => _dialogs.Count > 0;
     public Action<string>? LogSink
     {
         get => _logSink;
@@ -160,12 +164,24 @@ public sealed class WinUIPlatformService
             case EViewAction.RoutingRuleSettingWindow when value is RoutingItem routing:
                 return await ShowRoutingRuleDialogAsync(routing);
 
-            case EViewAction.RoutingRuleDetailsWindow when value is RulesItem rule:
+            case EViewAction.ChooseRoutingApplication when value is RoutingRuleDetailsViewModel details:
+                if (await PickOpenFileAsync([".exe"]) is { } application) details.AddApplication(application);
+                return true;
+
+            case EViewAction.RoutingDefaultNodeWindow or EViewAction.RoutingRuleDetailsWindow
+                or EViewAction.RoutingWebsiteRuleWindow when value is RulesItem rule:
                 if (_dialogs.TryPeek(out var routingContext) && routingContext.ViewModel is RoutingRuleSettingViewModel)
                 {
-                    return await ShowInlineRoutingRuleDetailsAsync(routingContext, rule);
+                    return await ShowInlineRoutingRuleDetailsAsync(routingContext, rule,
+                        action == EViewAction.RoutingDefaultNodeWindow,
+                        action == EViewAction.RoutingWebsiteRuleWindow);
                 }
-                return await ShowFormDialogAsync("路由规则详情", new RoutingRuleDetailsViewModel(rule, HandleAsync));
+                var detailsViewModel = new RoutingRuleDetailsViewModel(rule, HandleAsync,
+                    action == EViewAction.RoutingDefaultNodeWindow,
+                    action == EViewAction.RoutingWebsiteRuleWindow);
+                await detailsViewModel.LoadOutboundChoicesAsync();
+                return await ShowDialogAsync(detailsViewModel.WebsiteOnly ? "网站分流" : "路由规则详情", detailsViewModel,
+                    new RoutingRuleDetailsView(detailsViewModel), detailsViewModel.WebsiteOnly ? 560 : 1120);
 
             case EViewAction.ImportRulesFromFile:
                 if (_dialogs.TryPeek(out var ruleContext) && ruleContext.ViewModel is RoutingRuleSettingViewModel ruleVm &&
@@ -285,8 +301,13 @@ public sealed class WinUIPlatformService
 
     public UpdateManagerView CreateUpdateView()
     {
-        return new(new CheckUpdateViewModel(HandleAsync));
+        return new(new CheckUpdateViewModel(HandleAsync, includeAppUpdates: false,
+                reloadCore: MainViewModel == null ? null : MainViewModel.Reload),
+            CheckApplicationUpdateAsync, ApplicationUpdateStatus, ComponentUpdateStatuses);
     }
+
+    public Task<bool> ShowDiagnosticDialogAsync(string title, UIElement content)
+        => ShowDialogAsync(title, new object(), content, 620);
 
     private async Task<bool> ShowFormDialogAsync(string title, object viewModel, double width = 920)
     {
@@ -309,14 +330,17 @@ public sealed class WinUIPlatformService
     private async Task<bool> ShowRoutingRuleDialogAsync(RoutingItem routing)
     {
         var viewModel = new RoutingRuleSettingViewModel(routing, HandleAsync);
+        await viewModel.LoadNodeNamesAsync();
         return await ShowDialogAsync("路由规则", viewModel, new RoutingRuleEditorView(viewModel), 1120);
     }
 
-    private async Task<bool> ShowInlineRoutingRuleDetailsAsync(DialogContext context, RulesItem rule)
+    private async Task<bool> ShowInlineRoutingRuleDetailsAsync(DialogContext context, RulesItem rule,
+        bool defaultOnly = false, bool websiteOnly = false)
     {
-        var viewModel = new RoutingRuleDetailsViewModel(rule, HandleAsync);
+        var viewModel = new RoutingRuleDetailsViewModel(rule, HandleAsync, defaultOnly, websiteOnly);
+        await viewModel.LoadOutboundChoicesAsync();
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (!context.BeginInline("路由规则详情", new RoutingRuleDetailsView(viewModel), completion))
+        if (!context.BeginInline(websiteOnly ? "网站分流" : "路由规则详情", new RoutingRuleDetailsView(viewModel), completion))
         {
             return false;
         }

@@ -19,6 +19,10 @@
   <ItemGroup>
     <ProjectReference Include="..\ServiceLib\ServiceLib.csproj" />
     <Compile Include="..\AmazTool\UpdateArchiveInstaller.cs" Link="Update\UpdateArchiveInstaller.cs" />
+    <Compile Include="..\AmazTool\UpdateCommandOptions.cs" Link="Update\UpdateCommandOptions.cs" />
+    <Compile Include="..\AmazTool\UpdateProcessWaiter.cs" Link="Update\UpdateProcessWaiter.cs" />
+    <Compile Include="..\AmazTool\UpgradeApp.cs" Link="Update\UpgradeApp.cs" />
+    <Compile Include="..\AmazTool\Utils.cs" Link="Update\Utils.cs" />
   </ItemGroup>
 
 </Project>

@@ -29,6 +29,7 @@ public partial class CoreConfigV2rayService(CoreConfigContext context)
             }
 
             ret.Msg = ResUI.InitialConfiguration;
+            RoutingNodeSelection.ValidateReferences(context);
 
             var result = EmbedUtils.GetEmbedText(Global.V2raySampleClient);
             if (result.IsNullOrEmpty())

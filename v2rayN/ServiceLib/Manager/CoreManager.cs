@@ -102,7 +102,8 @@ public class CoreManager
         }
         await CoreStop(preserveLocationProtection: true);
 
-        if (!AppManager.Instance.EnsureLocalPortsAvailable())
+        if (!AppManager.Instance.EnsureLocalPortsAvailable(
+            ServiceLib.Services.Privacy.UdpInterceptionConfig.ShouldCreateInbound(mainContext) && preContext is null))
         {
             await UpdateFunc(true, "无法找到可用的本地代理端口，请修改本地监听端口后重试。");
             return;
@@ -143,9 +144,8 @@ public class CoreManager
             try { return monitoredCore is not null && ReferenceEquals(_processService, monitoredCore) && !monitoredCore.HasExited; }
             catch (InvalidOperationException) { return false; }
         }
-        await _udpInterception.StartAsync(_config, AppManager.Instance.GetLocalPort(EInboundProtocol.socks),
-            node.ConfigType != EConfigType.Custom && mainContext.FullConfigTemplate is not { Enabled: true }
-                && preContext is null && mainContext.RunCoreType is ECoreType.Xray or ECoreType.sing_box,
+        await _udpInterception.StartAsync(_config, AppManager.Instance.GetLocalPort(EInboundProtocol.udpInterception),
+            ServiceLib.Services.Privacy.UdpInterceptionConfig.ShouldCreateInbound(mainContext) && preContext is null,
             CoreAlive, UpdateFunc);
         if (_config.GuiItem.ProxyStunTraffic && !_config.TunModeItem.EnableTun && !_config.GuiItem.EnableUdpInterception)
         {

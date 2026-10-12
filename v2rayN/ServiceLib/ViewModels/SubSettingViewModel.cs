@@ -2,6 +2,7 @@ namespace ServiceLib.ViewModels;
 
 public class SubSettingViewModel : MyReactiveObject
 {
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
     public IObservableCollection<SubItem> SubItems { get; } = new ObservableCollectionExtended<SubItem>();
 
     [Reactive]
@@ -53,8 +54,16 @@ public class SubSettingViewModel : MyReactiveObject
 
     public async Task RefreshSubItems()
     {
-        SubItems.Clear();
-        SubItems.AddRange(await AppManager.Instance.SubItems());
+        await _refreshGate.WaitAsync();
+        try
+        {
+            var selectedId = SelectedSource?.Id;
+            var subscriptions = await AppManager.Instance.SubItems() ?? [];
+            SubItems.Clear();
+            SubItems.AddRange(subscriptions);
+            SelectedSource = subscriptions.FirstOrDefault(item => item.Id == selectedId) ?? new();
+        }
+        finally { _refreshGate.Release(); }
     }
 
     public async Task EditSubAsync(bool blNew)

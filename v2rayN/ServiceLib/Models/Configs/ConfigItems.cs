@@ -245,6 +245,7 @@ public class WebDavItem
 public class CheckUpdateItem
 {
     public bool CheckPreReleaseUpdate { get; set; }
+    public bool AutoUpdateCores { get; set; }
     public List<string>? SelectedCoreTypes { get; set; }
 }
 

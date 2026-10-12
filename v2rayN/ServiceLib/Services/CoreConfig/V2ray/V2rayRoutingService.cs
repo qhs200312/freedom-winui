@@ -1,3 +1,5 @@
+using ServiceLib.Services.Privacy;
+
 namespace ServiceLib.Services.CoreConfig;
 
 public partial class CoreConfigV2rayService
@@ -6,6 +8,17 @@ public partial class CoreConfigV2rayService
     {
         try
         {
+            var privacyOutbound = GenRoutingUserRuleOutbound(RoutingNodeSelection.DefaultProxyReference(context));
+            if (UdpInterceptionConfig.ShouldCreateInbound(context))
+            {
+                // Intercepted applications must not inherit ordinary direct rules.
+                _coreConfig.routing.rules.Add(new()
+                {
+                    type = "field",
+                    inboundTag = [UdpInterceptionConfig.InboundTag],
+                    outboundTag = privacyOutbound
+                });
+            }
             if (context.IsTunEnabled)
             {
                 var tunRules = JsonUtils.Deserialize<List<RulesItem4Ray>>(EmbedUtils.GetEmbedText(Global.V2raySampleTunRules));
@@ -35,6 +48,16 @@ public partial class CoreConfigV2rayService
             if (_coreConfig.routing?.rules != null)
             {
                 _coreConfig.routing.domainStrategy = _config.RoutingBasicItem.DomainStrategy;
+                var applicationRules = (JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [])
+                    .Where(rule => context.IsTunEnabled && rule.Enabled
+                        && rule.RuleType != ERuleType.DNS && rule.Process?.Count > 0).ToList();
+                foreach (var applicationRule in applicationRules)
+                {
+                    var processRule = JsonUtils.Deserialize<RulesItem4Ray>(JsonUtils.Serialize(applicationRule));
+                    processRule!.domain = null;
+                    processRule.ip = null;
+                    GenRoutingUserRule(processRule);
+                }
 
                 if (_config.GuiItem.ProxyStunTraffic)
                 {
@@ -46,14 +69,14 @@ public partial class CoreConfigV2rayService
                         _coreConfig.routing.rules.Add(new()
                         {
                             type = "field", network = "udp", port = WebRtcRoutingPolicy.Ports,
-                            ip = addresses, outboundTag = Global.ProxyTag
+                            ip = addresses, outboundTag = privacyOutbound
                         });
                     }
                     _coreConfig.routing.rules.Add(new()
                     {
                         type = "field", network = "udp",
                         domain = WebRtcRoutingPolicy.Domains.Select(domain => $"full:{domain}").ToList(),
-                        outboundTag = Global.ProxyTag
+                        outboundTag = privacyOutbound
                     });
                 }
 
@@ -76,8 +99,12 @@ public partial class CoreConfigV2rayService
                         {
                             continue;
                         }
-
                         var item2 = JsonUtils.Deserialize<RulesItem4Ray>(JsonUtils.Serialize(item));
+                        if (context.IsTunEnabled && item.Process?.Count > 0)
+                        {
+                            if (!(item.Domain?.Count > 0 || item.Ip?.Count > 0)) continue;
+                            item2!.process = null;
+                        }
                         GenRoutingUserRule(item2);
                     }
                 }
@@ -202,12 +229,14 @@ public partial class CoreConfigV2rayService
             return outboundTag;
         }
 
-        var node = context.AllProxiesMap.GetValueOrDefault($"remark:{outboundTag}");
+        var node = context.AllProxiesMap.GetValueOrDefault(RoutingNodeSelection.MapKey(outboundTag));
 
         if (node == null
             || (!Global.XraySupportConfigType.Contains(node.ConfigType)
             && !node.ConfigType.IsGroupType()))
         {
+            if (RoutingNodeSelection.TryGetIndexId(outboundTag, out _))
+                throw new InvalidOperationException($"Routing node is unavailable: {outboundTag}");
             return Global.ProxyTag;
         }
 

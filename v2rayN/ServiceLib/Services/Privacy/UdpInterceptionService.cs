@@ -48,9 +48,8 @@ public sealed class UdpInterceptionService
                 using var driver = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\ndisrd");
                 driverInstalled = driver is not null && Convert.ToInt32(driver.GetValue("Start", 4)) != 4;
             }
-            var inbound = config.Inbound.First();
             var error = UdpInterceptionConfig.GetPrerequisiteError(Utils.IsWindows(), Utils.IsAdministrator(),
-                available, driverInstalled, !string.IsNullOrEmpty(inbound.User), inbound.UdpEnabled);
+                available, driverInstalled);
             if (error is not null) throw new InvalidOperationException(error);
             if (!Utils.IsWindows()) return;
 
@@ -105,7 +104,7 @@ public sealed class UdpInterceptionService
             _status = "运行中（实验性）";
             _monitorCancellation = new CancellationTokenSource();
             _ = MonitorAsync(process, coreAlive, report, _monitorCancellation.Token);
-            await report(false, "普通模式 UDP 接管已启动；仅作用于已配置应用。此原型不是完整防泄漏边界。");
+            await report(false, "普通模式 UDP 接管已启动；已配置应用的接管流量通过专用入口优先走代理，不再套用普通直连分流。组件退出及 IPv6 分片仍可能绕过，此功能不是完整防泄漏边界。");
         }
         catch (Exception ex)
         {

@@ -62,7 +62,8 @@ public class CoreConfigContextBuilder
         {
             var rules = JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [];
             foreach (var ruleItem in rules.Where(ruleItem =>
-                         ruleItem.Enabled && !Global.OutboundTags.Contains(ruleItem.OutboundTag)))
+                         ruleItem.Enabled && ruleItem.RuleType != ERuleType.DNS
+                         && !Global.OutboundTags.Contains(ruleItem.OutboundTag)))
             {
                 if (ruleItem.OutboundTag.IsNullOrEmpty())
                 {
@@ -70,11 +71,17 @@ public class CoreConfigContextBuilder
                     ruleItem.OutboundTag = Global.ProxyTag;
                     continue;
                 }
-                var ruleOutboundNode = await AppManager.Instance.GetProfileItemViaRemarks(ruleItem.OutboundTag);
+                var byId = RoutingNodeSelection.TryGetIndexId(ruleItem.OutboundTag, out var nodeIndexId);
+                var ruleOutboundNode = byId
+                    ? await AppManager.Instance.GetProfileItem(nodeIndexId)
+                    : await AppManager.Instance.GetProfileItemViaRemarks(ruleItem.OutboundTag);
                 if (ruleOutboundNode == null)
                 {
-                    validatorResult.Warnings.Add(string.Format(ResUI.MsgRoutingRuleOutboundNodeNotFound,
-                        ruleItem.Remarks, ruleItem.OutboundTag));
+                    var message = string.Format(ResUI.MsgRoutingRuleOutboundNodeNotFound,
+                        ruleItem.Remarks, ruleItem.OutboundTag);
+                    // A pinned node must never silently switch to another exit.
+                    if (byId) validatorResult.Errors.Add(message);
+                    else validatorResult.Warnings.Add(message);
                     ruleItem.OutboundTag = Global.ProxyTag;
                     continue;
                 }
@@ -84,14 +91,16 @@ public class CoreConfigContextBuilder
                     string.Format(ResUI.MsgRoutingRuleOutboundNodeWarning, ruleItem.Remarks, ruleItem.OutboundTag, w)));
                 if (!ruleNodeValidatorResult.Success)
                 {
-                    validatorResult.Warnings.AddRange(ruleNodeValidatorResult.Errors.Select(e =>
+                    var messages = ruleNodeValidatorResult.Errors.Select(e =>
                         string.Format(ResUI.MsgRoutingRuleOutboundNodeError, ruleItem.Remarks, ruleItem.OutboundTag,
-                            e)));
+                            e));
+                    if (byId) validatorResult.Errors.AddRange(messages);
+                    else validatorResult.Warnings.AddRange(messages);
                     ruleItem.OutboundTag = Global.ProxyTag;
                     continue;
                 }
 
-                context.AllProxiesMap[$"remark:{ruleItem.OutboundTag}"] = actRuleNode;
+                context.AllProxiesMap[RoutingNodeSelection.MapKey(ruleItem.OutboundTag)] = actRuleNode;
             }
         }
         if (context.IsTunEnabled)

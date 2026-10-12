@@ -52,53 +52,76 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
         }
     }
 
-    public async Task CheckUpdateCore(ECoreType type, bool preRelease)
+    public Task CheckUpdateCore(ECoreType type, bool preRelease)
+        => CheckUpdateCore(type, preRelease, CancellationToken.None);
+
+    public async Task CheckUpdateCore(ECoreType type, bool preRelease, CancellationToken cancellationToken)
     {
-        var url = string.Empty;
-        var fileName = string.Empty;
-
+        cancellationToken.ThrowIfCancellationRequested();
         DownloadService downloadHandle = new();
-        downloadHandle.UpdateCompleted += (sender2, args) =>
-        {
-            if (args.Success)
-            {
-                _ = UpdateFunc(false, ResUI.MsgDownloadV2rayCoreSuccessfully);
-                _ = UpdateFunc(false, ResUI.MsgUnpacking);
-
-                try
-                {
-                    _ = UpdateFunc(true, fileName);
-                }
-                catch (Exception ex)
-                {
-                    _ = UpdateFunc(false, ex.Message);
-                }
-            }
-            else
-            {
-                _ = UpdateFunc(false, args.Msg);
-            }
-        };
-        downloadHandle.Error += (sender2, args) =>
-        {
-            _ = UpdateFunc(false, args.GetException().Message);
-        };
-
         var displayName = type == ECoreType.v2rayN ? Global.AppName : type.ToString();
+        AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Checking));
         await UpdateFunc(false, string.Format(ResUI.MsgStartUpdating, displayName));
-        var result = await CheckUpdateAsync(downloadHandle, type, preRelease);
+        var result = await CheckUpdateAsync(downloadHandle, type, preRelease).WaitAsync(cancellationToken);
         if (result.Success)
         {
+            var version = result.Version?.ToVersionString();
+            AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Available, version));
+            downloadHandle.ProgressChanged += (_, progress) => AppEvents.UpdateStatusChanged.Publish(
+                new(type, UpdateStage.Downloading, version, progress.Percentage, progress.BytesReceived, progress.TotalBytes));
+            downloadHandle.UpdateCompleted += (_, args) =>
+            {
+                if (!args.Success) _ = UpdateFunc(false, args.Msg);
+            };
+            downloadHandle.Error += (_, args) =>
+            {
+                AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Failed, version, Error: args.GetException().Message));
+                _ = UpdateFunc(false, args.GetException().Message);
+            };
             await UpdateFunc(false, string.Format(ResUI.MsgParsingSuccessfully, displayName));
             await UpdateFunc(false, result.Msg);
 
-            url = result.Url.ToString();
-            var ext = url.Contains(".tar.gz") ? ".tar.gz" : Path.GetExtension(url);
-            fileName = Utils.GetTempPath(Utils.GetGuid() + ext);
-            await downloadHandle.DownloadFileAsync(url, fileName, true, _timeout);
+            var url = result.Url.ToString();
+            var path = new Uri(url).AbsolutePath;
+            var ext = path.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) ? ".tar.gz" : Path.GetExtension(path);
+            var fileName = Utils.GetTempPath(Utils.GetGuid() + ext);
+            AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Downloading, version));
+            var completed = false;
+            try
+            {
+                await downloadHandle.DownloadFileWithProgressAsync(url, fileName, true,
+                    new InlineProgress<DownloadProgressSnapshot>(progress => AppEvents.UpdateStatusChanged.Publish(
+                        new(type, UpdateStage.Downloading, version, progress.Percentage, progress.BytesReceived, progress.TotalBytes))),
+                    cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Ready, version, PackagePath: fileName));
+                await UpdateFunc(false, ResUI.MsgDownloadV2rayCoreSuccessfully);
+                await UpdateFunc(false, ResUI.MsgUnpacking);
+                await UpdateFunc(true, fileName);
+                completed = true;
+            }
+            catch (OperationCanceledException)
+            {
+                AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Cancelled, version));
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Failed, version, Error: ex.Message));
+                await UpdateFunc(false, ex.Message);
+            }
+            finally
+            {
+                if (!completed && File.Exists(fileName))
+                {
+                    try { File.Delete(fileName); } catch (IOException) { }
+                }
+            }
         }
         else
         {
+            AppEvents.UpdateStatusChanged.Publish(new(type,
+                result.IsUpToDate ? UpdateStage.UpToDate : UpdateStage.Failed, Error: result.IsUpToDate ? null : result.Msg));
             if (!result.Msg.IsNullOrEmpty())
             {
                 await UpdateFunc(false, result.Msg);
@@ -115,14 +138,21 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
 
         var downloadHandle = new DownloadService();
         var checkPreRelease = CoreInfoManager.Instance.GetCheckPreRelease(type, preRelease);
-        return await CheckUpdateAsync(downloadHandle, type, checkPreRelease);
+        if (type != ECoreType.v2rayN) AppEvents.UpdateStatusChanged.Publish(new(type, UpdateStage.Checking));
+        var result = await CheckUpdateAsync(downloadHandle, type, checkPreRelease);
+        if (type != ECoreType.v2rayN)
+            AppEvents.UpdateStatusChanged.Publish(new(type, result.Success ? UpdateStage.Available
+                : result.IsUpToDate ? UpdateStage.UpToDate : UpdateStage.Failed,
+                result.Version?.ToVersionString(), Error: result.Success || result.IsUpToDate ? null : result.Msg));
+        return result;
     }
 
-    public async Task<List<string>> CheckHasUpdateOnlyAll(bool preRelease)
+    public async Task<List<string>> CheckHasUpdateOnlyAll(bool preRelease, bool includeAppUpdates = true)
     {
         var msgs = new List<string>();
         foreach (var type in CoreInfoManager.Instance.GetCheckUpdateCoreTypes())
         {
+            if (!includeAppUpdates && type == ECoreType.v2rayN) continue;
             if (!(_config.CheckUpdateItem.SelectedCoreTypes?.Contains(type.ToString()) ?? true))
             {
                 continue;
@@ -177,6 +207,17 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
     private async Task<UpdateResult> GetRemoteVersion(DownloadService downloadHandle, ECoreType type, bool preRelease)
     {
         var coreInfo = CoreInfoManager.Instance.GetCoreInfo(type);
+        if (type == ECoreType.v2rayN)
+        {
+            var assetName = Utils.IsWindows() ? RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => "freedom-windows-64.zip",
+                Architecture.Arm64 => "freedom-windows-arm64.zip",
+                _ => null,
+            } : null;
+            return await GetAppReleaseAsync(preRelease, assetName,
+                url => downloadHandle.TryDownloadString(url, true, Global.AppName));
+        }
         var tagName = string.Empty;
         if (preRelease)
         {
@@ -207,6 +248,39 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
         if (tagName.IsNullOrEmpty() || (type == ECoreType.v2rayN && version == new SemanticVersion(0, 0, 0)))
             return new UpdateResult(false, "未获取到有效的发布版本，请确认仓库有可访问的 Release。");
         return new UpdateResult(true, version);
+    }
+
+    private static async Task<UpdateResult> GetAppReleaseAsync(bool preRelease, string? assetName,
+        Func<string, Task<string?>> downloadMetadata)
+    {
+        if (assetName is not ("freedom-windows-64.zip" or "freedom-windows-arm64.zip"))
+            return new UpdateResult(false, "App updates are not supported for this platform or package.");
+
+        var repository = Global.CoreUrls[ECoreType.v2rayN];
+        var releasesUrl = $"{Global.GithubApiUrl}/{repository}/releases";
+        var json = await downloadMetadata(preRelease ? releasesUrl : releasesUrl + "/latest");
+        if (string.IsNullOrWhiteSpace(json))
+            return new UpdateResult(false, "The app release metadata is unavailable.");
+
+        var release = preRelease
+            ? JsonUtils.Deserialize<List<GitHubRelease>>(json)?.FirstOrDefault(item => item != null && !item.Draft)
+            : JsonUtils.Deserialize<GitHubRelease>(json);
+        if (release == null || release.Draft || (!preRelease && release.Prerelease)
+            || string.IsNullOrEmpty(release.TagName)
+            || !Regex.IsMatch(release.TagName, @"\Av[0-9]+\.[0-9]+\.[0-9]+\z"))
+            return new UpdateResult(false, "The app release metadata does not contain a valid published version.");
+
+        var version = new SemanticVersion(release.TagName);
+        if (version == new SemanticVersion(0, 0, 0) || !System.Version.TryParse(version.ToVersionString(), out _))
+            return new UpdateResult(false, "The app release version is invalid.");
+
+        // Select the package and body from this exact response, never from another release.
+        var expectedUrl = $"{Global.GithubUrl}/{repository}/releases/download/{release.TagName}/{assetName}";
+        var assets = release.Assets?.Where(asset => asset != null && asset.Name == assetName).ToList();
+        if (assets?.Count != 1 || assets[0].BrowserDownloadUrl != expectedUrl)
+            return new UpdateResult(false, "The app release does not contain the matching branded package.");
+
+        return new AppUpdateCheckResult(new AppUpdateRelease(version.ToVersionString(), expectedUrl, release.Body));
     }
 
     private async Task<SemanticVersion> GetCoreVersion(ECoreType type)
@@ -267,7 +341,7 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
         {
             var version = result.Version ?? new SemanticVersion(0, 0, 0);
             var coreInfo = CoreInfoManager.Instance.GetCoreInfo(type);
-            var coreUrl = await GetUrlFromCore(coreInfo) ?? string.Empty;
+            var coreUrl = type == ECoreType.v2rayN ? string.Empty : await GetUrlFromCore(coreInfo) ?? string.Empty;
             SemanticVersion curVersion;
             string message;
             string? url;
@@ -300,7 +374,7 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
                     {
                         curVersion = new SemanticVersion(Utils.GetVersionInfo());
                         message = string.Format(ResUI.IsLatestN, Global.AppName, curVersion);
-                        url = string.Format(coreUrl, version);
+                        url = result.Url;
                         break;
                     }
                 default:
@@ -309,7 +383,10 @@ public class UpdateService(Config config, Func<bool, string, Task> updateFunc)
 
             if (curVersion >= version && version != new SemanticVersion(0, 0, 0))
             {
-                return new UpdateResult(false, message);
+                result.Success = false;
+                result.Msg = message;
+                result.IsUpToDate = true;
+                return result;
             }
 
             result.Url = url;

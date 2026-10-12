@@ -13,6 +13,9 @@ public class BrandingTests
         model.CoreTypeForStorage.Should().Be("v2rayN");
         new CheckUpdateModel { CoreType = ECoreType.Xray }.DisplayName.Should().Be("Xray");
         new CheckUpdateModel { IsGeoFile = true }.DisplayName.Should().Be("GeoFiles");
+        var singbox = new CheckUpdateModel { CoreType = ECoreType.sing_box };
+        singbox.DisplayName.Should().Be("sing-box");
+        singbox.CoreTypeForStorage.Should().Be("sing_box");
     }
 
     [Fact]

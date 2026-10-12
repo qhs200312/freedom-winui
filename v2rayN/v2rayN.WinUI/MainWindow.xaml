@@ -2,6 +2,7 @@
     x:Class="v2rayN.WinUI.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:v2rayN.WinUI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
@@ -80,10 +81,9 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Grid Height="72" Margin="16,12,16,8">
+                    <Grid Height="48" Margin="16,4,16,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="44" />
                             <ColumnDefinition Width="*" />
@@ -91,10 +91,8 @@
                         <Border Width="38" Height="38" CornerRadius="8">
                             <Image Stretch="UniformToFill" Source="Assets/freedom.png" />
                         </Border>
-                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock FontFamily="Segoe UI Variable Display" FontSize="16" FontWeight="SemiBold" Text="freedom" />
-                            <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="Modern Shell" />
-                        </StackPanel>
+                        <TextBlock Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                   FontFamily="Segoe UI Variable Display" FontSize="16" FontWeight="SemiBold" Text="freedom" />
                     </Grid>
 
                     <ListView
@@ -144,6 +142,12 @@
                                 <TextBlock VerticalAlignment="Center" Text="运行日志" />
                             </StackPanel>
                         </ListViewItem>
+                        <ListViewItem Tag="unlock">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <SymbolIcon Symbol="World" />
+                                <TextBlock VerticalAlignment="Center" Text="解锁测试" />
+                            </StackPanel>
+                        </ListViewItem>
                         <ListViewItem Tag="updates">
                             <StackPanel Orientation="Horizontal" Spacing="12">
                                 <SymbolIcon Symbol="Download" />
@@ -158,54 +162,6 @@
                         </ListViewItem>
                     </ListView>
 
-                    <Border
-                        Grid.Row="2"
-                        Margin="16,0,16,16"
-                        Padding="4,12,4,0"
-                        BorderBrush="{ThemeResource PanelStrokeBrush}"
-                        BorderThickness="0,1,0,0">
-                        <Grid RowSpacing="7">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock
-                                Foreground="{ThemeResource MutedTextBrush}"
-                                FontSize="11"
-                                Text="进程内存" />
-                            <Grid Grid.Row="1" ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock VerticalAlignment="Center" FontSize="12" Text="freedom" />
-                                <TextBlock
-                                    x:Name="AppMemoryText"
-                                    Grid.Column="1"
-                                    MinWidth="66"
-                                    HorizontalAlignment="Right"
-                                    FontFamily="Cascadia Mono"
-                                    FontSize="12"
-                                    Text="-- MB" />
-                            </Grid>
-                            <Grid Grid.Row="2" ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="CoreMemoryNameText" VerticalAlignment="Center" FontSize="12" Text="sing-box" />
-                                <TextBlock
-                                    x:Name="CoreMemoryText"
-                                    Grid.Column="1"
-                                    MinWidth="66"
-                                    HorizontalAlignment="Right"
-                                    FontFamily="Cascadia Mono"
-                                    FontSize="12"
-                                    Text="-- MB" />
-                            </Grid>
-                        </Grid>
-                    </Border>
                 </Grid>
             </Border>
 
@@ -438,27 +394,34 @@
                                             <TextBlock FontWeight="SemiBold" Text="出口 IP" />
                                             <ProgressRing x:Name="OutboundIpProgress" Width="18" Height="18" HorizontalAlignment="Right" IsActive="False" />
                                         </Grid>
-                                        <TextBlock x:Name="OutboundIpDetailText" Grid.Row="1" Style="{StaticResource QuietTextStyle}" Text="等待检测" TextTrimming="CharacterEllipsis" />
+                                        <Grid Grid.Row="1" ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                            <controls:CountryFlag x:Name="OutboundCountryFlag" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="OutboundIpDetailText" Grid.Column="1" Style="{StaticResource QuietTextStyle}" Text="等待检测" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                        </Grid>
                                         <Grid Grid.Row="2" ColumnSpacing="10">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock x:Name="OutboundIpText" VerticalAlignment="Center" FontFamily="Cascadia Mono" FontSize="20" FontWeight="SemiBold" Text="--" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="OutboundIpText" VerticalAlignment="Center" FontFamily="Cascadia Mono" FontSize="16" FontWeight="SemiBold" Text="--" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
                                             <StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="1">
                                                 <TextBlock HorizontalAlignment="Right" Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="节点延迟" />
                                                 <TextBlock x:Name="NodeLatencyText" HorizontalAlignment="Right" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" Text="未测试" />
                                             </StackPanel>
                                         </Grid>
                                         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
-                                            <Button x:Name="RefreshOutboundIpButton" Click="RefreshOutboundIp_Click" ToolTipService.ToolTip="重新检测出口 IP">
+                                            <Button x:Name="RefreshOutboundIpButton" Width="32" Height="32" Padding="4" Click="RefreshOutboundIp_Click" ToolTipService.ToolTip="重新检测出口 IP">
                                                 <SymbolIcon Symbol="Refresh" />
                                             </Button>
-                                            <Button x:Name="RefreshNodeLatencyButton" Click="RefreshNodeLatency_Click" ToolTipService.ToolTip="检测当前节点真实延迟">
+                                            <Button x:Name="RefreshNodeLatencyButton" Width="32" Height="32" Padding="4" Click="RefreshNodeLatency_Click" ToolTipService.ToolTip="检测当前节点真实延迟">
                                                 <SymbolIcon Symbol="Clock" />
                                             </Button>
-                                            <Button x:Name="CopyOutboundIpButton" Click="CopyOutboundIp_Click" IsEnabled="False" ToolTipService.ToolTip="复制出口 IP">
+                                            <Button x:Name="CopyOutboundIpButton" Width="32" Height="32" Padding="4" Click="CopyOutboundIp_Click" IsEnabled="False" ToolTipService.ToolTip="复制出口 IP">
                                                 <SymbolIcon Symbol="Copy" />
+                                            </Button>
+                                            <Button x:Name="OutboundIpDetailsButton" Width="32" Height="32" Padding="4" Click="OutboundIpDetails_Click" IsEnabled="False" ToolTipService.ToolTip="详细 IP 信息">
+                                                <SymbolIcon Symbol="More" />
                                             </Button>
                                         </StackPanel>
                                     </Grid>
@@ -519,7 +482,7 @@
                                             Text="0 B/s" />
                                     </Grid>
 
-                                    <Canvas
+                                    <Grid
                                         x:Name="TrafficCanvas"
                                         Grid.Row="0"
                                         Grid.Column="1"
@@ -528,9 +491,8 @@
                                         <Line x:Name="AxisBottom" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" />
                                         <Line x:Name="AxisMiddle" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" StrokeDashArray="3,4" />
                                         <Line x:Name="AxisTop" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" StrokeDashArray="3,4" />
-                                        <Polyline x:Name="UploadLine" Stroke="{StaticResource SuccessBrush}" StrokeThickness="2" />
-                                        <Polyline x:Name="DownloadLine" Stroke="{StaticResource WarningBrush}" StrokeThickness="2" />
-                                    </Canvas>
+                                        <controls:SmoothTrafficChart x:Name="MainTrafficGraph" VisibleSampleCount="60" />
+                                    </Grid>
 
                                     <!-- X-axis labels (time) -->
                                     <Grid Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
@@ -680,10 +642,15 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="1.7*" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="80" /></Grid.ColumnDefinitions>
                                 <TextBlock VerticalAlignment="Center" Text="类型" /><TextBlock Grid.Column="1" VerticalAlignment="Center" Text="备注" /><TextBlock Grid.Column="2" VerticalAlignment="Center" Text="地址" /><TextBlock Grid.Column="3" VerticalAlignment="Center" Text="端口" /><TextBlock Grid.Column="4" VerticalAlignment="Center" Text="传输" /><TextBlock Grid.Column="5" VerticalAlignment="Center" Text="TLS" /><TextBlock Grid.Column="6" VerticalAlignment="Center" Text="订阅" /><TextBlock Grid.Column="7" VerticalAlignment="Center" Text="延迟" />
                             </Grid>
-                            <ListView x:Name="ProfilesList" Grid.Row="1" IsItemClickEnabled="True" ItemClick="ProfilesList_ItemClick" DoubleTapped="ProfilesList_DoubleTapped" KeyDown="ProfilesList_KeyDown" SelectionChanged="ProfilesList_SelectionChanged" SelectionMode="Extended">
+                            <ListView x:Name="ProfilesList" Grid.Row="1" IsItemClickEnabled="True" ItemClick="ProfilesList_ItemClick" DoubleTapped="ProfilesList_DoubleTapped" KeyDown="ProfilesList_KeyDown" SelectionChanged="ProfilesList_SelectionChanged" SelectionMode="Extended" ContextRequested="ProfilesList_ContextRequested" ContextCanceled="ProfilesList_ContextCanceled">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
                                 <ListView.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid MinHeight="42" Padding="10,0" ColumnSpacing="12" ContextFlyout="{StaticResource ProfileContextMenu}" ContextRequested="ProfileRow_ContextRequested">
+                                        <Grid MinHeight="42" Padding="10,0" ColumnSpacing="12" Background="Transparent">
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="110" /><ColumnDefinition Width="1.7*" /><ColumnDefinition Width="1.5*" /><ColumnDefinition Width="70" /><ColumnDefinition Width="110" /><ColumnDefinition Width="100" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="80" /></Grid.ColumnDefinitions>
                                             <TextBlock VerticalAlignment="Center" Text="{Binding ConfigType}" />
                                             <Grid Grid.Column="1" ColumnSpacing="5">
@@ -706,7 +673,10 @@
                     <ContentControl x:Name="ModuleContent" Grid.Row="1" Margin="0,18,0,0" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
                 </Grid>
 
-                <InfoBar x:Name="MessageBar" Margin="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="{ThemeResource BrandPanelBrush}" BorderBrush="{ThemeResource BrandPanelStrokeBrush}" Foreground="{ThemeResource BrandBrush}" IsClosable="True" IsOpen="False" MaxWidth="520" Severity="Informational" />
+                <StackPanel Margin="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Spacing="8" MaxWidth="400">
+                    <StackPanel x:Name="UpdateNotifications" Spacing="8" />
+                    <InfoBar x:Name="MessageBar" Background="{ThemeResource BrandPanelBrush}" BorderBrush="{ThemeResource BrandPanelStrokeBrush}" Foreground="{ThemeResource BrandBrush}" IsClosable="True" IsOpen="False" MaxWidth="400" Severity="Informational" />
+                </StackPanel>
             </Grid>
         </Grid>
     </Grid>

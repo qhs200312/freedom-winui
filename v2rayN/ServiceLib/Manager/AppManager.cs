@@ -176,7 +176,7 @@ public sealed class AppManager
     /// Ensures the local mixed inbounds have a bindable consecutive port range.
     /// Windows can reject reserved ports even when no process is listening on them.
     /// </summary>
-    public bool EnsureLocalPortsAvailable()
+    public bool EnsureLocalPortsAvailable(bool includeUdpInterception = false)
     {
         var inbound = _config.Inbound.FirstOrDefault(t => t.Protocol == nameof(EInboundProtocol.socks));
         if (inbound == null)
@@ -193,11 +193,18 @@ public sealed class AppManager
         {
             offsets.Add((int)EInboundProtocol.socks3);
         }
+        if (includeUdpInterception)
+        {
+            offsets.Add((int)EInboundProtocol.udpInterception);
+        }
 
         bool IsRangeAvailable(int basePort) => offsets.All(offset =>
             basePort + offset > 0 && basePort + offset < Global.MaxPort
-            && Utils.IsTcpPortAvailable(basePort + offset)
-            && (!inbound.UdpEnabled || Utils.IsUdpPortAvailable(basePort + offset)));
+            && Utils.IsTcpPortAvailable(basePort + offset,
+                offset == (int)EInboundProtocol.udpInterception ? IPAddress.Loopback : IPAddress.Any)
+            && (!(inbound.UdpEnabled || offset == (int)EInboundProtocol.udpInterception)
+                || Utils.IsUdpPortAvailable(basePort + offset,
+                    offset == (int)EInboundProtocol.udpInterception ? IPAddress.Loopback : IPAddress.Any)));
 
         if (IsRangeAvailable(inbound.LocalPort))
         {

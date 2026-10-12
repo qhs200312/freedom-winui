@@ -1,3 +1,5 @@
+using ServiceLib.Services.Privacy;
+
 namespace ServiceLib.Services.CoreConfig;
 
 public partial class CoreConfigSingboxService
@@ -48,6 +50,17 @@ public partial class CoreConfigSingboxService
                         inbound.listen = listen;
                     }
                 }
+            }
+
+            if (UdpInterceptionConfig.ShouldCreateInbound(context))
+            {
+                _coreConfig.inbounds.Add(new()
+                {
+                    type = nameof(EInboundProtocol.socks),
+                    tag = UdpInterceptionConfig.InboundTag,
+                    listen = Global.Loopback,
+                    listen_port = AppManager.Instance.GetLocalPort(EInboundProtocol.udpInterception)
+                });
             }
 
             if (context.IsTunEnabled)

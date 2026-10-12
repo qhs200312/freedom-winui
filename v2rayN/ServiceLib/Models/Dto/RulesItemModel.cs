@@ -8,8 +8,7 @@ public class RulesItemModel : RulesItem
     public string Domains { get; set; }
     public string Protocols { get; set; }
     public string RuleTypeName { get; set; }
+    public string? OutboundDisplayName { get; set; }
 
-    public string DisplayName => Remarks.IsNotEmpty()
-        ? Remarks
-        : $"{OutboundTag}  |  {Domains}";
+    public string DisplayName => $"{(Domains.IsNotEmpty() ? Domains : Remarks)}  |  {OutboundDisplayName ?? OutboundTag}";
 }

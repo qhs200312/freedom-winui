@@ -73,8 +73,14 @@ public class MainWindowViewModel : MyReactiveObject
 
     #region Init
 
+    private readonly bool _includeAppUpdates;
+
     public MainWindowViewModel(Func<EViewAction, object?, Task<bool>>? updateView, bool forceRealtimeSpeed = false)
+        : this(updateView, forceRealtimeSpeed, includeAppUpdates: true) { }
+
+    public MainWindowViewModel(Func<EViewAction, object?, Task<bool>>? updateView, bool forceRealtimeSpeed, bool includeAppUpdates)
     {
+        _includeAppUpdates = includeAppUpdates;
         _config = AppManager.Instance.Config;
         _config.ForceRealtimeSpeed = forceRealtimeSpeed;
         _updateView = updateView;
@@ -283,7 +289,7 @@ public class MainWindowViewModel : MyReactiveObject
         await ConfigHandler.InitBuiltinFullConfigTemplate(_config);
         await ProfileExManager.Instance.Init();
         await CoreManager.Instance.Init(_config, UpdateHandler);
-        TaskManager.Instance.RegUpdateTask(_config, UpdateTaskHandler);
+        TaskManager.Instance.RegUpdateTask(_config, UpdateTaskHandler, _includeAppUpdates);
 
         if (_config.GuiItem.EnableStatistics || _config.GuiItem.DisplayRealTimeSpeed || _config.ForceRealtimeSpeed)
         {

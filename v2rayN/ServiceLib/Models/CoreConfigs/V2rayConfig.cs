@@ -481,12 +481,6 @@ public class HysteriaSettings4Ray
     public string? auth { get; set; }
 }
 
-public class UdpHop4Ray
-{
-    public string? ports { get; set; }
-    public string? interval { get; set; }
-}
-
 public class Finalmask4Ray
 {
     public List<Mask4Ray>? tcp { get; set; }
@@ -510,6 +504,12 @@ public class MaskSettings4Ray
     public string? url { get; set; }
     public List<string>? stunServers { get; set; }
     public string? packetSize { get; set; }
+
+    // udphop
+    public string? mode { get; set; }
+    public string? interval { get; set; }
+    public string? remotePorts { get; set; }
+    public List<string>? remoteIPs { get; set; }
 
     // fragment
     public string? packets { get; set; }
@@ -535,7 +535,7 @@ public class QuicParams4Ray
     public string? congestion { get; set; }
     public string? brutalUp { get; set; }
     public string? brutalDown { get; set; }
-    public UdpHop4Ray? udpHop { get; set; }
+    public bool? disableChromeParrot { get; set; }
 }
 
 public class AccountsItem4Ray

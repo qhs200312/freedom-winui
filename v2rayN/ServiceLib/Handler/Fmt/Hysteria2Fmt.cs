@@ -27,6 +27,7 @@ public class Hysteria2Fmt : BaseFmt
         ResolveUriQuery(query, ref item);
         ResolveHy2UriQuery(query, ref item);
 
+        msg = string.Empty;
         return item;
     }
 
@@ -170,6 +171,11 @@ public class Hysteria2Fmt : BaseFmt
         {
             Ports = GetQueryDecoded(query, "mport"),
             SalamanderPass = GetQueryDecoded(query, "obfs-password"),
+            // These optional extensions are not part of the official HY2 URI scheme.
+            UpMbps = int.TryParse(GetQueryDecoded(query, "upmbps"), out var up) && up >= 0 ? up : null,
+            DownMbps = int.TryParse(GetQueryDecoded(query, "downmbps"), out var down) && down >= 0 ? down : null,
+            HopInterval = GetQueryDecoded(query, "hopinterval").NullIfEmpty(),
+            CongestionControl = GetQueryDecoded(query, "congestion").NullIfEmpty(),
             // NOTE: The "PacketSize" parameter is not defined by the official URI Scheme, may remove or rename it in the future.
             GeckoMinPacketSize = GetQueryDecoded(query, "minPacketSize"),
             GeckoMaxPacketSize = GetQueryDecoded(query, "maxPacketSize"),
@@ -220,6 +226,27 @@ public class Hysteria2Fmt : BaseFmt
         if (!protocolExtraItem.Ports.IsNullOrEmpty())
         {
             dicQuery.Add("mport", Utils.UrlEncode(protocolExtraItem.Ports.Replace(':', '-')));
+        }
+        if (protocolExtraItem.UpMbps is >= 0)
+        {
+            dicQuery.Add("upmbps", protocolExtraItem.UpMbps.Value.ToString());
+        }
+        if (protocolExtraItem.DownMbps is >= 0)
+        {
+            dicQuery.Add("downmbps", protocolExtraItem.DownMbps.Value.ToString());
+        }
+        if (!protocolExtraItem.HopInterval.IsNullOrEmpty())
+        {
+            dicQuery.Add("hopinterval", Utils.UrlEncode(protocolExtraItem.HopInterval));
+        }
+        if (!protocolExtraItem.CongestionControl.IsNullOrEmpty())
+        {
+            dicQuery.Add("congestion", Utils.UrlEncode(protocolExtraItem.CongestionControl));
+        }
+        if (!item.Finalmask.IsNullOrEmpty())
+        {
+            var mask = JsonUtils.ParseJson(item.Finalmask);
+            dicQuery.Add("fm", Utils.UrlEncode(mask is null ? item.Finalmask : JsonUtils.Serialize(mask, false)));
         }
     }
 }

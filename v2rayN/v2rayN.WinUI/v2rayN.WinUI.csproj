@@ -36,6 +36,7 @@
     <Content Include="Assets\freedom.ico" />
     <Content Include="Assets\freedom.png" />
     <Content Include="Assets\NotifyIcon*.ico" />
+    <Content Include="Assets\Flags\*" />
   </ItemGroup>
 
   <Target Name="BuildUpgradeTool" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">

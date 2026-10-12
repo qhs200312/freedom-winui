@@ -28,6 +28,7 @@ public partial class CoreConfigSingboxService(CoreConfigContext context)
             }
 
             ret.Msg = ResUI.InitialConfiguration;
+            RoutingNodeSelection.ValidateReferences(context);
 
             var result = EmbedUtils.GetEmbedText(Global.SingboxSampleClient);
             if (result.IsNullOrEmpty())

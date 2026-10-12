@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using ServiceLib;
 using ServiceLib.Common;
 using ServiceLib.Enums;
+using ServiceLib.Manager;
 using ServiceLib.Models.Entities;
 using ServiceLib.ViewModels;
 
@@ -526,7 +527,13 @@ public sealed class DynamicFormView : UserControl
         };
 
         FrameworkElement editor;
-        if (BuildChoiceField(source, property, binding, label) is { } choiceEditor)
+        if (source is AddServerViewModel server && server.SelectedSource.ConfigType == EConfigType.Hysteria2
+            && server.SelectedSource.Finalmask.IsNullOrEmpty()
+            && property.Name is nameof(AddServerViewModel.UpMbps) or nameof(AddServerViewModel.DownMbps))
+        {
+            editor = BuildHy2BandwidthField(server, property, label);
+        }
+        else if (BuildChoiceField(source, property, binding, label) is { } choiceEditor)
         {
             editor = choiceEditor;
         }
@@ -571,11 +578,72 @@ public sealed class DynamicFormView : UserControl
         return editor;
     }
 
+    private static NumberBox BuildHy2BandwidthField(AddServerViewModel server, PropertyInfo property, string label)
+    {
+        var editor = new NumberBox
+        {
+            Header = label, Minimum = 0, Maximum = int.MaxValue,
+            SmallChange = 1, LargeChange = 10, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact
+        };
+        // Showing a global fallback must not persist it as a per-node override.
+        var updating = false;
+        void RefreshValue()
+        {
+            updating = true;
+            try
+            {
+                var nodeValue = property.GetValue(server) as int?;
+                var defaults = AppManager.Instance.Config.HysteriaItem;
+                var inherited = property.Name == nameof(AddServerViewModel.UpMbps) ? defaults.UpMbps : defaults.DownMbps;
+                editor.Value = nodeValue is >= 0 ? nodeValue.Value : Math.Max(0, inherited);
+                ToolTipService.SetToolTip(editor, nodeValue is >= 0
+                    ? $"节点带宽：{editor.Value:0} Mbps" : $"继承全局 HY2 带宽：{editor.Value:0} Mbps");
+            }
+            finally { updating = false; }
+        }
+        RefreshValue();
+        editor.ValueChanged += (_, args) =>
+        {
+            if (updating) return;
+            if (double.IsNaN(args.NewValue))
+                property.SetValue(server, null);
+            else if (args.NewValue >= 0 && args.NewValue <= int.MaxValue && args.NewValue == Math.Truncate(args.NewValue))
+                property.SetValue(server, (int)args.NewValue);
+            RefreshValue();
+        };
+        PropertyChangedEventHandler changed = (_, args) =>
+        {
+            if (string.IsNullOrEmpty(args.PropertyName) || args.PropertyName == property.Name)
+                RefreshValue();
+        };
+        editor.Loaded += (_, _) =>
+        {
+            server.PropertyChanged -= changed;
+            server.PropertyChanged += changed;
+            RefreshValue();
+        };
+        editor.Unloaded += (_, _) => server.PropertyChanged -= changed;
+        return editor;
+    }
+
     private static FrameworkElement? BuildChoiceField(object source, PropertyInfo property, Binding binding, string label)
     {
         if (source is not OptionSettingViewModel)
         {
             return null;
+        }
+
+        if (property.Name == nameof(OptionSettingViewModel.EnableHWA))
+        {
+            // WinUI manages GPU rendering independently of the persisted legacy setting.
+            var panel = new StackPanel { Spacing = 6, MinHeight = 48 };
+            panel.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap });
+            panel.Children.Add(new TextBlock
+            {
+                Text = "GPU 优先（系统自动管理）",
+                TextWrapping = TextWrapping.Wrap
+            });
+            return panel;
         }
 
         if (property.Name == "MainGirdOrientation")
@@ -920,6 +988,7 @@ public sealed class DynamicFormView : UserControl
 
     private static readonly Dictionary<string, string> PropertyLabels = new()
     {
+        ["AutoUpdateCores"] = "自动更新内核",
         ["ProxyStunTraffic"] = "STUN 服务器优先走代理",
         ["EnableUdpInterception"] = "普通代理 UDP 接管（实验性，需要驱动）",
         ["UdpInterceptionApplications"] = "UDP 接管进程名（分号或换行分隔）",
@@ -944,7 +1013,7 @@ public sealed class DynamicFormView : UserControl
         ["EnableDragDropSort"] = "允许拖放排序", ["DoubleClick2Activate"] = "双击激活服务器", ["TrayMenuServersLimit"] = "托盘菜单服务器数量",
         ["CurrentFontFamily"] = "界面字体", ["SpeedTestTimeout"] = "测速超时（秒）", ["SpeedTestUrl"] = "测速文件地址",
         ["SpeedPingTestUrl"] = "延迟测试地址", ["UdpTestTarget"] = "UDP 测试目标", ["MixedConcurrencyCount"] = "混合测试并发数",
-        ["EnableHWA"] = "启用硬件加速", ["SubConvertUrl"] = "订阅转换地址", ["MainGirdOrientation"] = "主界面布局方向",
+        ["EnableHWA"] = "页面渲染", ["SubConvertUrl"] = "订阅转换地址", ["MainGirdOrientation"] = "主界面布局方向",
         ["GeoFileSourceUrl"] = "Geo 数据源", ["SrsFileSourceUrl"] = "SRS 数据源", ["RoutingRulesSourceUrl"] = "路由规则数据源",
         ["IPAPIUrl"] = "出口 IP 检测 API", ["RootCertProvider"] = "根证书提供程序",
         ["NotProxyLocalAddress"] = "本地地址不使用代理", ["SystemProxyAdvancedProtocol"] = "系统代理协议",

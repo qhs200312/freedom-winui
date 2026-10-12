@@ -33,4 +33,7 @@ public enum EViewAction
     DispatcherRefreshServersBiz,
     DispatcherRefreshIcon,
     DispatcherShowMsg,
+    ChooseRoutingApplication,
+    RoutingDefaultNodeWindow,
+    RoutingWebsiteRuleWindow,
 }

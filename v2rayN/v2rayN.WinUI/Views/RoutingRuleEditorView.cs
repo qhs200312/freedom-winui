@@ -68,7 +68,7 @@ public sealed class RoutingRuleEditorView : UserControl
         return new Expander
         {
             Header = "规则集信息",
-            IsExpanded = true,
+            IsExpanded = false,
             Content = grid,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
@@ -85,18 +85,21 @@ public sealed class RoutingRuleEditorView : UserControl
             IsDynamicOverflowEnabled = true,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
-        bar.PrimaryCommands.Add(Command("新增规则", Symbol.Add, _viewModel.RuleAddCmd));
-        bar.PrimaryCommands.Add(Command("编辑规则", Symbol.Edit, _viewModel.RuleEditCmd));
-        bar.PrimaryCommands.Add(Command("从文件导入", Symbol.Download, _viewModel.ImportRulesFromFileCmd));
-        bar.PrimaryCommands.Add(Command("从剪贴板导入", Symbol.Paste, _viewModel.ImportRulesFromClipboardCmd));
-        bar.PrimaryCommands.Add(Command("从订阅地址导入", Symbol.World, _viewModel.ImportRulesFromUrlCmd));
+        bar.PrimaryCommands.Add(Command("添加域名", Symbol.Add, _viewModel.WebsiteAddCmd));
+        bar.PrimaryCommands.Add(Command("编辑", Symbol.Edit, _viewModel.RuleEditCmd));
         bar.PrimaryCommands.Add(Command("删除", Symbol.Delete, _viewModel.RuleRemoveCmd));
-        bar.PrimaryCommands.Add(Command("导出选中", Symbol.Share, _viewModel.RuleExportSelectedCmd));
-        bar.PrimaryCommands.Add(Command("移到顶部", Symbol.Up, _viewModel.MoveTopCmd));
-        bar.PrimaryCommands.Add(Command("上移", Symbol.Up, _viewModel.MoveUpCmd));
-        bar.PrimaryCommands.Add(Command("下移", Symbol.Download, _viewModel.MoveDownCmd));
-        bar.PrimaryCommands.Add(Command("移到底部", Symbol.Download, _viewModel.MoveBottomCmd));
+        bar.PrimaryCommands.Add(Command("默认节点", Symbol.Forward, _viewModel.DefaultNodeCmd));
         bar.PrimaryCommands.Add(Command("保存规则集", Symbol.Save, _viewModel.SaveCmd));
+        bar.SecondaryCommands.Add(Command("应用分流", Symbol.AllApps, _viewModel.ApplicationAddCmd));
+        bar.SecondaryCommands.Add(Command("新增高级规则", Symbol.Add, _viewModel.RuleAddCmd));
+        bar.SecondaryCommands.Add(Command("从文件导入", Symbol.Download, _viewModel.ImportRulesFromFileCmd));
+        bar.SecondaryCommands.Add(Command("从剪贴板导入", Symbol.Paste, _viewModel.ImportRulesFromClipboardCmd));
+        bar.SecondaryCommands.Add(Command("从订阅地址导入", Symbol.World, _viewModel.ImportRulesFromUrlCmd));
+        bar.SecondaryCommands.Add(Command("导出选中", Symbol.Share, _viewModel.RuleExportSelectedCmd));
+        bar.SecondaryCommands.Add(Command("移到顶部", Symbol.Up, _viewModel.MoveTopCmd));
+        bar.SecondaryCommands.Add(Command("上移", Symbol.Up, _viewModel.MoveUpCmd));
+        bar.SecondaryCommands.Add(Command("下移", Symbol.Download, _viewModel.MoveDownCmd));
+        bar.SecondaryCommands.Add(Command("移到底部", Symbol.Download, _viewModel.MoveBottomCmd));
         return bar;
     }
 

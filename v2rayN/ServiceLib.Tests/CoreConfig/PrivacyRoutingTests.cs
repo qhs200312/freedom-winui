@@ -127,7 +127,7 @@ public class PrivacyRoutingTests
         await CheckCoreIfConfigured(generated.Data!.ToString()!, "XRAY_VALIDATION_EXE", ["run", "-test", "-c"]);
     }
 
-    private static async Task CheckCoreIfConfigured(string json, string environmentVariable, string[] arguments)
+    internal static async Task CheckCoreIfConfigured(string json, string environmentVariable, string[] arguments)
     {
         var executable = Environment.GetEnvironmentVariable(environmentVariable);
         if (string.IsNullOrEmpty(executable)) return;

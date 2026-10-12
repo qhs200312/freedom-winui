@@ -410,6 +410,10 @@ public partial class CoreConfigV2rayService
                     echConfigList = _node.EchConfigList.NullIfEmpty(),
                     verifyPeerCertByName = _node.VerifyPeerCertByName.NullIfEmpty(),
                 };
+                if (_node.ConfigType == EConfigType.Hysteria2 && tlsSettings.alpn?.Count is not > 0)
+                {
+                    tlsSettings.alpn = ["h3"];
+                }
                 if (sni.IsNotEmpty())
                 {
                     tlsSettings.serverName = sni;
@@ -609,29 +613,17 @@ public partial class CoreConfigV2rayService
                             ? _config.HysteriaItem.HopInterval
                             : Global.Hysteria2DefaultHopInt).ToString();
                     var hy2Finalmask = new Finalmask4Ray();
-                    var quicParams = new QuicParams4Ray();
-                    if (!ports.IsNullOrEmpty() &&
-                        (ports.Contains(':') || ports.Contains('-') || ports.Contains(',')))
-                    {
-                        var udpHop = new UdpHop4Ray
-                        {
-                            ports = ports.Replace(':', '-'),
-                            interval = hopInterval,
-                        };
-                        quicParams.udpHop = udpHop;
-                    }
+                    // Older HY2 peers can reject larger datagrams negotiated by Chrome parrot.
+                    var quicParams = new QuicParams4Ray { disableChromeParrot = true };
+                    hy2Finalmask.udp = [];
+                    quicParams.congestion = protocolExtra.CongestionControl?.Trim().ToLowerInvariant().NullIfEmpty()
+                        ?? (upMbps > 0 || downMbps > 0 ? "brutal" : "bbr");
                     if (upMbps > 0 || downMbps > 0)
                     {
-                        quicParams.congestion = "brutal";
                         quicParams.brutalUp = upMbps > 0 ? $"{upMbps}mbps" : null;
                         quicParams.brutalDown = downMbps > 0 ? $"{downMbps}mbps" : null;
                     }
-                    else
-                    {
-                        quicParams.congestion = "bbr";
-                    }
                     hy2Finalmask.quicParams = quicParams;
-                    hy2Finalmask.udp ??= [];
                     if (HyRealm.TryParse(protocolExtra.Hy2RealmUrl, out var realm)
                         && realm is not null)
                     {
@@ -656,6 +648,20 @@ public partial class CoreConfigV2rayService
                         {
                             type = "salamander",
                             settings = salamanderSettings,
+                        });
+                    }
+                    if (!ports.IsNullOrEmpty())
+                    {
+                        // Core reverses this list before wrapping connections; HandleDial must be innermost.
+                        hy2Finalmask.udp.Add(new Mask4Ray
+                        {
+                            type = "udphop",
+                            settings = new MaskSettings4Ray
+                            {
+                                mode = "intervalLocal,intervalRemote",
+                                remotePorts = ports.Replace(':', '-'),
+                                interval = hopInterval,
+                            },
                         });
                     }
                     streamSettings.hysteriaSettings = new()
@@ -703,6 +709,49 @@ public partial class CoreConfigV2rayService
             if (!_node.Finalmask.IsNullOrEmpty())
             {
                 streamSettings.finalmask = JsonUtils.ParseJson(_node.Finalmask);
+                if (_node.ConfigType == EConfigType.Hysteria2
+                    && streamSettings.finalmask is JsonObject mask)
+                {
+                    var customQuic = mask["quicParams"] as JsonObject;
+                    if (customQuic is null && mask["quicParams"] is null)
+                    {
+                        customQuic = new JsonObject();
+                        mask["quicParams"] = customQuic;
+                    }
+                    if (customQuic is not null && customQuic["disableChromeParrot"] is null)
+                    {
+                        customQuic["disableChromeParrot"] = true;
+                    }
+                    if (mask["quicParams"] is JsonObject quic && quic["udpHop"] is JsonObject legacyHop)
+                    {
+                        // Upgrade only the runtime copy; keep the saved node and all other QUIC settings.
+                        var udp = mask["udp"] as JsonArray ?? new JsonArray();
+                        if (!udp.Any(m => m?["type"]?.GetValue<string>() == "udphop"))
+                        {
+                            udp.Add(new JsonObject
+                            {
+                                ["type"] = "udphop",
+                                ["settings"] = new JsonObject
+                                {
+                                    ["mode"] = "intervalLocal,intervalRemote",
+                                    ["interval"] = legacyHop["interval"]?.DeepClone() ?? JsonValue.Create("30"),
+                                    ["remotePorts"] = legacyHop["ports"]?.GetValue<string>()?.Replace(':', '-'),
+                                },
+                            });
+                        }
+                        mask["udp"] = udp;
+                        quic.Remove("udpHop");
+                    }
+                    if (mask["udp"] is JsonArray masks)
+                    {
+                        var hops = masks.Where(m => m?["type"]?.GetValue<string>() == "udphop").ToList();
+                        if (hops.Count == 1 && !ReferenceEquals(masks.LastOrDefault(), hops[0]))
+                        {
+                            masks.Remove(hops[0]);
+                            masks.Add(hops[0]);
+                        }
+                    }
+                }
             }
         }
         catch (Exception ex)

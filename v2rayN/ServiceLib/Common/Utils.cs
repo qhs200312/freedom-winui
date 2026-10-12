@@ -752,11 +752,13 @@ public class Utils
     /// Checks whether a TCP listener can bind the port. This also catches
     /// Windows excluded/reserved ports that do not appear in active listeners.
     /// </summary>
-    public static bool IsTcpPortAvailable(int port)
+    public static bool IsTcpPortAvailable(int port) => IsTcpPortAvailable(port, IPAddress.Any);
+
+    public static bool IsTcpPortAvailable(int port, IPAddress listenAddress)
     {
         try
         {
-            using var listener = new TcpListener(IPAddress.Any, port);
+            using var listener = new TcpListener(listenAddress, port);
             listener.Start();
             listener.Stop();
             return true;
@@ -772,11 +774,13 @@ public class Utils
         }
     }
 
-    public static bool IsUdpPortAvailable(int port)
+    public static bool IsUdpPortAvailable(int port) => IsUdpPortAvailable(port, IPAddress.Any);
+
+    public static bool IsUdpPortAvailable(int port, IPAddress listenAddress)
     {
         try
         {
-            using var client = new UdpClient(new IPEndPoint(IPAddress.Any, port));
+            using var client = new UdpClient(new IPEndPoint(listenAddress, port));
             return true;
         }
         catch (SocketException)

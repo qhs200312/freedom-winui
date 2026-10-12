@@ -731,7 +731,7 @@ public static class ConfigHandler
     /// <summary>
     /// Add or edit a Hysteria2 server
     /// Validates and processes Hysteria2-specific settings
-    /// Sets the core type to sing_box as required by Hysteria2
+    /// Defaults to sing_box without replacing an explicitly selected core
     /// </summary>
     /// <param name="config">Current configuration</param>
     /// <param name="profileItem">Hysteria2 profile to add</param>
@@ -745,8 +745,7 @@ public static class ConfigHandler
         profileItem.Address = profileItem.Address.TrimEx();
         profileItem.Password = profileItem.Password.TrimEx();
         profileItem.Fingerprint = string.Empty;
-        profileItem.Alpn = string.Empty;
-        //profileItem.Alpn = "h3";
+        profileItem.Alpn = profileItem.Alpn.IsNullOrEmpty() ? "h3" : profileItem.Alpn.TrimEx();
         profileItem.Network = string.Empty;
 
         if (profileItem.StreamSecurity.IsNullOrEmpty())
@@ -1260,6 +1259,12 @@ public static class ConfigHandler
                && (o.ConfigType == EConfigType.Trojan || o.StreamSecurity == n.StreamSecurity)
                && AreEqual(oProtocolExtra.Flow, nProtocolExtra.Flow)
                && AreEqual(oProtocolExtra.SalamanderPass, nProtocolExtra.SalamanderPass)
+               && (o.ConfigType != EConfigType.Hysteria2
+                   || (AreEqual(oProtocolExtra.Ports, nProtocolExtra.Ports)
+                       && AreEqual(oProtocolExtra.HopInterval, nProtocolExtra.HopInterval)
+                       && oProtocolExtra.UpMbps == nProtocolExtra.UpMbps
+                       && oProtocolExtra.DownMbps == nProtocolExtra.DownMbps
+                       && AreEqual(oProtocolExtra.CongestionControl, nProtocolExtra.CongestionControl)))
                && AreEqual(o.Sni, n.Sni)
                && AreEqual(o.Alpn, n.Alpn)
                && AreEqual(o.Fingerprint, n.Fingerprint)
@@ -1968,6 +1973,7 @@ public static class ConfigHandler
         if (lstOriSub != null)
         {
             var lstSub = await AppManager.Instance.ProfileItems(subid);
+            await RemapRoutingNodeReferencesAsync(lstOriSub, lstSub ?? []);
             foreach (var item in lstSub)
             {
                 var existItem = FindMatchedProfileItem(lstOriSub, item);
@@ -1979,6 +1985,44 @@ public static class ConfigHandler
         }
 
         return counter;
+    }
+
+    private static async Task RemapRoutingNodeReferencesAsync(List<ProfileItem> previous, List<ProfileItem> current)
+    {
+        var replacements = new Dictionary<string, string>();
+        foreach (var old in previous.Where(previousNode => previousNode.IsSub
+                     && current.All(node => node.IndexId != previousNode.IndexId)))
+        {
+            var candidates = current.Where(node => node.Subid == old.Subid && node.ConfigType == old.ConfigType).ToList();
+            var matches = candidates.Where(node => CompareProfileItem(old, node, true)).ToList();
+            if (matches.Count == 0)
+                matches = candidates.Where(node => CompareProfileItem(old, node, false)).ToList();
+            if (matches.Count == 0 && old.Remarks.IsNotEmpty()
+                && previous.Count(node => node.ConfigType == old.ConfigType && node.Remarks == old.Remarks) == 1)
+                matches = candidates.Where(node => node.Remarks == old.Remarks).ToList();
+            // Ambiguous or removed nodes retain their reference and fail normal validation.
+            if (matches.Count == 1)
+                replacements[RoutingNodeSelection.Reference(old.IndexId)] =
+                    RoutingNodeSelection.Reference(matches[0].IndexId);
+        }
+        if (replacements.Count == 0) return;
+        foreach (var routing in await AppManager.Instance.RoutingItems() ?? [])
+        {
+            var rules = JsonUtils.Deserialize<List<RulesItem>>(routing.RuleSet);
+            if (rules is null) continue;
+            var changed = false;
+            foreach (var rule in rules)
+            {
+                if (rule.OutboundTag is not null && replacements.TryGetValue(rule.OutboundTag, out var replacement))
+                {
+                    rule.OutboundTag = replacement;
+                    changed = true;
+                }
+            }
+            if (!changed) continue;
+            routing.RuleSet = JsonUtils.Serialize(rules, false);
+            await SQLiteHelper.Instance.UpdateAsync(routing);
+        }
     }
 
     #endregion Batch add servers

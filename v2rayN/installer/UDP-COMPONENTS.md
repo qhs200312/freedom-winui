@@ -26,7 +26,11 @@ The engine runs only with the proxy core, not as an independently installed
 ProxiFyre service. Do not run another ProxiFyre instance simultaneously.
 
 Only listed process names are intercepted. Existing UDP sessions may require
-restarting the browser/Discord. Local IPv4 networks bypass interception.
+restarting the browser/Discord. Intercepted traffic uses a dedicated loopback
+SOCKS5 inbound at the local mixed port plus 7. This inbound routes to the selected
+proxy before normal DNS, STUN, direct, and user routing rules, including for
+unknown STUN servers and high-port media. The ordinary mixed inbound retains its
+normal routing and authentication settings. Local IPv4 networks bypass interception.
 IPv6 fragmented datagrams may bypass ProxiFyre; this is not a complete
 fail-closed leak prevention boundary. Engine failure or stopping freedom can
 restore direct UDP. A running status is not proof of the external exit IP.

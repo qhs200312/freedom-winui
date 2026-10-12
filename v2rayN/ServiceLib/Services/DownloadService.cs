@@ -10,6 +10,7 @@ public class DownloadService
     public event EventHandler<UpdateResult>? UpdateCompleted;
 
     public event ErrorEventHandler? Error;
+    public event EventHandler<DownloadProgressSnapshot>? ProgressChanged;
 
     private static readonly string _tag = "DownloadService";
 
@@ -53,12 +54,14 @@ public class DownloadService
         {
             UpdateCompleted?.Invoke(this, new UpdateResult(false, $"{ResUI.Downloading}   {url}"));
 
-            var progress = new Progress<double>();
-            progress.ProgressChanged += (sender, value) =>
+            var progress = new InlineProgress<double>(value =>
             {
                 if (value <= 100)
+                {
+                    ProgressChanged?.Invoke(this, new(0, null, value));
                     UpdateCompleted?.Invoke(this, new UpdateResult(false, $"...{value}%"));
-            };
+                }
+            });
 
             var webProxy = await GetWebProxy(blProxy, url);
             await DownloaderHelper.Instance.DownloadFileAsync(webProxy,
@@ -82,6 +85,77 @@ public class DownloadService
             }
         }
         return false;
+    }
+
+    /// <summary>Cancelable streamed update download with numeric progress and an idle timeout.</summary>
+    public async Task DownloadFileWithProgressAsync(string url, string fileName, bool useProxy,
+        IProgress<DownloadProgressSnapshot> progress, CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using var client = await CreateUpdateClientAsync(url, useProxy);
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        response.EnsureSuccessStatusCode();
+        var total = response.Content.Headers.ContentLength;
+        await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
+        await using var output = new FileStream(fileName, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+            81920, FileOptions.Asynchronous);
+        long received = 0;
+        Report();
+        var buffer = new byte[81920];
+        while (true)
+        {
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
+            var count = await input.ReadAsync(buffer, timeout.Token);
+            if (count == 0) break;
+            await output.WriteAsync(buffer.AsMemory(0, count), timeout.Token);
+            received += count;
+            Report();
+        }
+        if (received == 0 || (total.HasValue && received != total))
+            throw new IOException("The update download is empty or incomplete.");
+        await output.FlushAsync(timeout.Token);
+
+        void Report()
+        {
+            var snapshot = new DownloadProgressSnapshot(received, total,
+                total > 0 ? Math.Clamp(received * 100d / total.Value, 0, 100) : null);
+            progress.Report(snapshot);
+            ProgressChanged?.Invoke(this, snapshot);
+        }
+    }
+
+    public async Task<string?> DownloadUpdateChecksumAsync(string url, CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using var client = await CreateUpdateClientAsync(url, true);
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+        var buffer = new byte[16 * 1024 + 1];
+        var received = 0;
+        while (received < buffer.Length)
+        {
+            var count = await stream.ReadAsync(buffer.AsMemory(received), timeout.Token);
+            if (count == 0) return Encoding.UTF8.GetString(buffer, 0, received);
+            received += count;
+        }
+        throw new InvalidDataException("The update checksum response is too large.");
+    }
+
+    private async Task<HttpClient> CreateUpdateClientAsync(string url, bool useProxy)
+    {
+        var proxy = await GetWebProxy(useProxy, url);
+        var handler = new SocketsHttpHandler
+        {
+            Proxy = proxy, UseProxy = proxy != null, ConnectTimeout = TimeSpan.FromSeconds(5)
+        };
+        var policy = CertPemManager.Instance.BuildCertificateChainPolicy();
+        if (policy != null) handler.SslOptions.CertificateChainPolicy = policy;
+        var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+        client.DefaultRequestHeaders.UserAgent.TryParseAdd(Global.AppName);
+        return client;
     }
 
     /// <summary>

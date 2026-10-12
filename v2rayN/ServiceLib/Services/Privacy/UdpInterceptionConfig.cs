@@ -5,6 +5,15 @@ public static class UdpInterceptionConfig
     public const string ComponentVersion = "2.6.1";
     public const string ComponentDirectory = "proxifyre";
     public const string OwnershipMarker = ".freedom-managed";
+    public const string InboundTag = "udp-interception";
+
+    public static bool ShouldCreateInbound(CoreConfigContext context) =>
+        context.IsWindows && context.AppConfig.GuiItem.EnableUdpInterception
+        && !context.AppConfig.TunModeItem.EnableTun && !context.IsTunEnabled
+        && context.Node.ConfigType != EConfigType.Custom
+        && context.FullConfigTemplate is not { Enabled: true }
+        && context.RunCoreType is ECoreType.Xray or ECoreType.sing_box;
+
     public static readonly string[] ExcludedApplications =
     [
         "freedom.exe", "v2rayN.exe", "AmazTool.exe", "ProxiFyre.exe",
@@ -64,14 +73,12 @@ public static class UdpInterceptionConfig
     }
 
     public static string? GetPrerequisiteError(bool isWindows, bool isAdministrator,
-        bool componentAvailable, bool driverInstalled, bool hasAuthentication, bool udpEnabled)
+        bool componentAvailable, bool driverInstalled)
     {
         if (!isWindows) return "UDP 接管仅支持 Windows";
         if (!componentAvailable) return "UDP 接管组件未就绪，请运行原型准备脚本";
         if (!driverInstalled) return "缺少 Windows Packet Filter (NDISRD) 驱动";
         if (!isAdministrator) return "UDP 接管需要以管理员身份运行客户端";
-        if (hasAuthentication) return "原型暂不支持带认证的本地 SOCKS5 入口";
-        if (!udpEnabled) return "本地代理入口未启用 UDP";
         return null;
     }
 }

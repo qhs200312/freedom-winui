@@ -1,9 +1,12 @@
+using System.Security.Cryptography;
+
 namespace ServiceLib.UdpTest.Tester;
 
 public class StunService : IUdpTest
 {
     private const int StunDefaultPort = 3478;
     private const string StunDefaultServer = "stun.voztovoice.org";
+    private byte[]? _transactionId;
 
     private static readonly byte[] StunBindingRequestPacket =
     [
@@ -18,26 +21,49 @@ public class StunService : IUdpTest
 
     public byte[] BuildUdpRequestPacket()
     {
-        return (byte[])StunBindingRequestPacket.Clone();
+        var request = (byte[])StunBindingRequestPacket.Clone();
+        _transactionId = RandomNumberGenerator.GetBytes(12);
+        _transactionId.CopyTo(request, 8);
+        return request;
     }
 
     public bool VerifyAndExtractUdpResponse(byte[] stunResponseBytes)
     {
-        if (stunResponseBytes.Length < 20)
+        var response = stunResponseBytes.AsSpan();
+        if (_transactionId is null || response.Length < 20
+            || BinaryPrimitives.ReadUInt16BigEndian(response) != 0x0101
+            || BinaryPrimitives.ReadUInt32BigEndian(response[4..]) != 0x2112A442
+            || !response.Slice(8, 12).SequenceEqual(_transactionId))
         {
             return false;
         }
 
-        if (stunResponseBytes.Length >= 2)
+        var length = BinaryPrimitives.ReadUInt16BigEndian(response[2..]);
+        if (length % 4 != 0 || response.Length != 20 + length)
         {
-            var messageType = (stunResponseBytes[0] << 8) | stunResponseBytes[1];
-            if (messageType is 0x0101 or 0x0111)
-            {
-                return true;
-            }
+            return false;
         }
 
-        return true;
+        var mappedAddress = false;
+        for (var offset = 20; offset < response.Length;)
+        {
+            if (response.Length - offset < 4) return false;
+            var type = BinaryPrimitives.ReadUInt16BigEndian(response[offset..]);
+            var attributeLength = BinaryPrimitives.ReadUInt16BigEndian(response[(offset + 2)..]);
+            var paddedLength = (attributeLength + 3) & ~3;
+            offset += 4;
+            if (response.Length - offset < paddedLength) return false;
+            if (type is 0x0001 or 0x0020)
+            {
+                if (attributeLength < 4 || response[offset] != 0) return false;
+                var family = response[offset + 1];
+                if (!((family == 1 && attributeLength == 8) || (family == 2 && attributeLength == 20)))
+                    return false;
+                mappedAddress = true;
+            }
+            offset += paddedLength;
+        }
+        return mappedAddress;
     }
 
     public ushort GetDefaultTargetPort()

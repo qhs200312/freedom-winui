@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-15",
+  "generatedAt": "2026-10-12",
   "architecture": "win-x64",
   "cores": [
     {
       "name": "Xray",
-      "version": "26.9.9",
-      "url": "https://github.com/XTLS/Xray-core/releases/download/v26.9.9/Xray-windows-64.zip",
-      "sha256": "244deaba2098c2964e49bba90df3707777e5f5f428a82d2f29604015f24beec2"
+      "version": "26.9.30",
+      "url": "https://github.com/XTLS/Xray-core/releases/download/v26.9.30/Xray-windows-64.zip",
+      "sha256": "b17a619343c11b89d8faf36278298856749b15c52277d875d32051b33dcda617"
     },
     {
       "name": "sing-box",

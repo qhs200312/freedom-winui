@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace AmazTool;
 
@@ -13,7 +14,7 @@ internal static class UpdateArchiveInstaller
     ];
 
     public static void Install(string archivePath, string directory, Action? beforeApply = null,
-        Action<string>? beforeWrite = null)
+        Action<string>? beforeWrite = null, string? expectedSha256 = null)
     {
         var target = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         if (target == Path.GetPathRoot(target)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
@@ -28,7 +29,16 @@ internal static class UpdateArchiveInstaller
         Directory.CreateDirectory(stage);
         try
         {
-            using var archive = ZipFile.OpenRead(archivePath);
+            // Keep this exact verified file open without write/delete sharing throughout installation.
+            using var package = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (expectedSha256 != null)
+            {
+                if (expectedSha256.Length != 64 || expectedSha256.Any(c => !Uri.IsHexDigit(c))
+                    || !CryptographicOperations.FixedTimeEquals(SHA256.HashData(package), Convert.FromHexString(expectedSha256)))
+                    throw new InvalidDataException("Update package SHA-256 does not match.");
+                package.Position = 0;
+            }
+            using var archive = new ZipArchive(package, ZipArchiveMode.Read);
             if (archive.Entries.Count > 20_000) throw new InvalidDataException("Too many update entries.");
             var names = archive.Entries.Select(entry => Normalize(entry.FullName)).ToList();
             var appNames = names.Where(name => name.Equals("freedom.exe", StringComparison.OrdinalIgnoreCase)
