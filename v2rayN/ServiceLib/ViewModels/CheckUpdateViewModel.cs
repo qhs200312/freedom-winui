@@ -146,6 +146,20 @@ public class CheckUpdateViewModel : MyReactiveObject
         finally { CoreUpdateGate.Release(); }
     }
 
+    public async Task UpdateSingleAsync(CheckUpdateModel model)
+    {
+        var items = GetUpdateItems(model);
+        if (items.Count == 0 || !await CoreUpdateGate.WaitAsync(0, UpdateLifetime.Token)) return;
+        try
+        {
+            _automaticRun = false;
+            _updateToken = UpdateLifetime.Token;
+            _reloadAfterUpdate = true;
+            await Task.Run(() => CheckUpdateTask(items, persistSelection: false));
+        }
+        finally { CoreUpdateGate.Release(); }
+    }
+
     public async Task AutoUpdateCoresAsync(IEnumerable<ECoreType> availableTypes, CancellationToken cancellationToken = default)
     {
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, UpdateLifetime.Token);
@@ -219,27 +233,31 @@ public class CheckUpdateViewModel : MyReactiveObject
         }
     }
 
-    private async Task CheckUpdateTask()
+    private List<CheckUpdateModel> GetUpdateItems(CheckUpdateModel? singleItem = null)
     {
-        _lstUpdated.Clear();
-        _lstUpdated = CheckUpdateModels
-            .Where(x => x.IsSelected == true && (_includeAppUpdates || x.CoreType != _v2rayN))
+        return CheckUpdateModels
+            .Where(x => (singleItem == null ? x.IsSelected == true : ReferenceEquals(x, singleItem))
+                && (_includeAppUpdates || x.CoreType != _v2rayN))
+            .ToList();
+    }
+
+    private Task CheckUpdateTask() => CheckUpdateTask(GetUpdateItems(), persistSelection: true);
+
+    private async Task CheckUpdateTask(IReadOnlyList<CheckUpdateModel> items, bool persistSelection)
+    {
+        _lstUpdated = items
             .Select(x => new CheckUpdateModel()
             {
                 CoreType = x.CoreType,
                 IsGeoFile = x.IsGeoFile
             })
             .ToList();
-        await SaveSelectedCoreTypes();
+        if (persistSelection) await SaveSelectedCoreTypes();
 
-        for (var k = CheckUpdateModels.Count - 1; k >= 0; k--)
+        for (var k = items.Count - 1; k >= 0; k--)
         {
             _updateToken.ThrowIfCancellationRequested();
-            var item = CheckUpdateModels[k];
-            if (item.IsSelected != true || (!_includeAppUpdates && item.CoreType == _v2rayN))
-            {
-                continue;
-            }
+            var item = items[k];
 
             await UpdateView(item.CoreType, "...");
 

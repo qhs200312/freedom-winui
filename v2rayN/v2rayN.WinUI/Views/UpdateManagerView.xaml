@@ -9,7 +9,7 @@
             <AppBarButton Label="检查组件" Icon="Refresh" Command="{Binding CheckOnlyCmd}" />
             <AppBarButton Label="更新组件" Icon="Download" Command="{Binding CheckUpdateCmd}" />
         </CommandBar>
-        <Grid Grid.Row="1" Padding="12" ColumnSpacing="12" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource PanelStrokeBrush}">
+        <Grid x:Name="ApplicationUpdateRow" Grid.Row="1" Padding="12" ColumnSpacing="12" Background="Transparent" DoubleTapped="ApplicationRow_DoubleTapped" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource PanelStrokeBrush}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <SymbolIcon Symbol="AllApps" VerticalAlignment="Center" />
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
@@ -23,9 +23,14 @@
             </Button>
         </Grid>
         <ListView Grid.Row="2" ItemsSource="{Binding CheckUpdateModels}" SelectionMode="None">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Grid MinHeight="54" Padding="12" ColumnSpacing="12">
+                    <Grid MinHeight="54" Padding="12" ColumnSpacing="12" Background="Transparent" DoubleTapped="ComponentRow_DoubleTapped">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="1" Text="{Binding DisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" />

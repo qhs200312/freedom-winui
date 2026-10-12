@@ -1,4 +1,8 @@
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using System.Reactive.Linq;
 using ServiceLib.Common;
 using ServiceLib.Enums;
@@ -14,13 +18,22 @@ public sealed partial class UpdateManagerView : UserControl
     private IDisposable? _statusSubscription;
     private readonly object _progressLock = new();
     private readonly Dictionary<ECoreType, long> _lastProgress = [];
+    private readonly Func<Task>? _checkApplicationUpdate;
+    private readonly Func<UpdateStatusSnapshot>? _applicationStatus;
+    private readonly Func<CheckUpdateModel, Task> _updateComponent;
+    private bool _applicationActionRunning;
+    private bool _componentActionRunning;
 
     public UpdateManagerView(CheckUpdateViewModel viewModel, Func<Task>? checkApplicationUpdate = null,
         Func<UpdateStatusSnapshot>? applicationStatus = null,
-        Func<IReadOnlyList<UpdateStatusSnapshot>>? componentStatuses = null)
+        Func<IReadOnlyList<UpdateStatusSnapshot>>? componentStatuses = null,
+        Func<CheckUpdateModel, Task>? updateComponent = null)
     {
         InitializeComponent();
         _viewModel = viewModel;
+        _checkApplicationUpdate = checkApplicationUpdate;
+        _applicationStatus = applicationStatus;
+        _updateComponent = updateComponent ?? viewModel.UpdateSingleAsync;
         DataContext = viewModel;
         AppVersionText.Text = Utils.GetVersionInfo();
         if (applicationStatus != null) UpdateAppStatus(applicationStatus());
@@ -48,13 +61,53 @@ public sealed partial class UpdateManagerView : UserControl
         PrereleaseButton.IsChecked = viewModel.EnableCheckPreReleaseUpdate;
         PrereleaseButton.Click += (_, _) => viewModel.EnableCheckPreReleaseUpdate = PrereleaseButton.IsChecked == true;
         CheckApplicationButton.IsEnabled = checkApplicationUpdate != null;
-        CheckApplicationButton.Click += async (_, _) =>
+        CheckApplicationButton.Click += async (_, _) => await CheckApplicationAsync();
+    }
+
+    private async Task CheckApplicationAsync()
+    {
+        if (_checkApplicationUpdate == null || _applicationActionRunning || !CheckApplicationButton.IsEnabled) return;
+        _applicationActionRunning = true;
+        CheckApplicationButton.IsEnabled = false;
+        try { await _checkApplicationUpdate(); }
+        finally
         {
-            if (checkApplicationUpdate == null) return;
-            CheckApplicationButton.IsEnabled = false;
-            try { await checkApplicationUpdate(); }
-            finally { CheckApplicationButton.IsEnabled = true; }
-        };
+            _applicationActionRunning = false;
+            if (_applicationStatus != null) UpdateAppStatus(_applicationStatus());
+            else CheckApplicationButton.IsEnabled = true;
+        }
+    }
+
+    private async void ApplicationRow_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (IsButtonSource(e.OriginalSource as DependencyObject)) return;
+        e.Handled = true;
+        await CheckApplicationAsync();
+    }
+
+    private async void ComponentRow_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: CheckUpdateModel model }
+            || IsButtonSource(e.OriginalSource as DependencyObject)) return;
+        e.Handled = true;
+        if (_componentActionRunning) return;
+        _componentActionRunning = true;
+        try { await _updateComponent(model); }
+        catch (Exception ex)
+        {
+            await _viewModel.UpdateViewResult(new CheckUpdateModel
+            {
+                CoreType = model.CoreType, IsGeoFile = model.IsGeoFile, Remarks = ex.Message
+            });
+        }
+        finally { _componentActionRunning = false; }
+    }
+
+    private static bool IsButtonSource(DependencyObject? source)
+    {
+        for (var element = source; element != null; element = VisualTreeHelper.GetParent(element))
+            if (element is ButtonBase) return true;
+        return false;
     }
 
     private void UpdateStatus(UpdateStatusSnapshot status)
@@ -95,7 +148,9 @@ public sealed partial class UpdateManagerView : UserControl
             UpdateStage.Cancelled => "下载已取消",
             _ => "等待检查"
         };
-        CheckApplicationButton.IsEnabled = status.Stage is not (UpdateStage.Downloading or UpdateStage.Verifying or UpdateStage.HandedOff);
+        CheckApplicationButton.IsEnabled = !_applicationActionRunning
+            && _checkApplicationUpdate != null
+            && status.Stage is not (UpdateStage.Downloading or UpdateStage.Verifying or UpdateStage.HandedOff);
         var label = status.Stage == UpdateStage.Ready ? "安装软件更新"
             : status.Stage == UpdateStage.Available ? "查看软件更新" : "检查软件更新";
         CheckApplicationButton.Content = new SymbolIcon(status.Stage == UpdateStage.Ready ? Symbol.Download : Symbol.Refresh);
