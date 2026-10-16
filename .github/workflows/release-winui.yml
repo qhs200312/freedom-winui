@@ -85,14 +85,14 @@ jobs:
           ./installer/build-installer.ps1 -Version $version
           Copy-Item "artifacts/installer/v$version/output/freedom-windows-64-setup.exe" .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.package }}
           path: |
             v2rayN/${{ matrix.package }}.zip
             v2rayN/${{ matrix.package }}.zip.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.rid == 'win-x64'
         with:
           name: freedom-windows-64-setup
