@@ -9,6 +9,19 @@ namespace ServiceLib.Tests.Services;
 public class OutboundModeSelectionTests
 {
     [Fact]
+    public void MainlandBypass_ShouldSelectWhitelistInsteadOfTheLastCustomRulePlan()
+    {
+        var custom = new RoutingItem { Id = "custom", Remarks = "My rules", IsActive = true };
+        var white = new RoutingItem { Id = "white", Remarks = "V4-绕过大陆(Whitelist)" };
+        OutboundModeSelection.FindMainlandBypass([custom, white]).Should().BeSameAs(white);
+        OutboundModeSelection.IsMainlandBypass(custom).Should().BeFalse();
+        white.Enabled = false;
+        OutboundModeSelection.FindMainlandBypass([custom, white]).Should().BeNull();
+        var created = OutboundModeSelection.CreateRouting(OutboundMode.Rules, 1);
+        OutboundModeSelection.IsMainlandBypass(created).Should().BeTrue();
+    }
+
+    [Fact]
     public void ReturningToRules_ShouldRestoreTheRememberedCustomPlan()
     {
         var custom = new RoutingItem { Id = "custom", Remarks = "My rules" };

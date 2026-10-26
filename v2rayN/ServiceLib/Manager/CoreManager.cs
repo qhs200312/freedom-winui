@@ -21,6 +21,8 @@ public class CoreManager
     private readonly ServiceLib.Services.Privacy.UdpInterceptionService _udpInterception = new();
     public string UdpInterceptionStatus => _udpInterception.Status;
 
+    public long MainWorkingSet64 => _processService?.WorkingSet64 ?? 0;
+
     public long WorkingSet64 => (_processService?.WorkingSet64 ?? 0) + (_processPreService?.WorkingSet64 ?? 0)
         + _nowhereBridges.WorkingSet64;
 

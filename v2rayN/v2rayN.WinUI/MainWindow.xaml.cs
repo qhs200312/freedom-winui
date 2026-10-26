@@ -161,7 +161,7 @@ public sealed partial class MainWindow : Window
         SubscribeToApplicationEvents();
         _trafficTimer = InitializeTrafficChart();
         _trafficAnimation = new(this, _appWindow, MainTrafficGraph, () => DashboardPage.Visibility == Visibility.Visible,
-            CoreToggleButton.SetAnimationEnabled);
+            SetDashboardAnimations);
         Closed += MainWindow_Closed;
         SelectNavItem("dashboard");
         NavigateToTag("dashboard");
@@ -268,6 +268,7 @@ public sealed partial class MainWindow : Window
         if (coreTypeChanged)
         {
             _lastRunningCoreType = runningCoreType;
+            _lastMemorySampleAt = 0;
             ResetSessionTraffic();
         }
         CoreStatusText.Text = coreRunning ? "● 运行中" : "○ 未运行";
@@ -307,6 +308,7 @@ public sealed partial class MainWindow : Window
         DownloadTotalText.Text = $"累计 {Utils.HumanFy(_sessionDownload)}";
         TotalTrafficText.Text = Utils.HumanFy(_sessionUpload + _sessionDownload);
         TotalTrafficDetailText.Text = $"上传 {Utils.HumanFy(_sessionUpload)} · 下载 {Utils.HumanFy(_sessionDownload)}";
+        RefreshLifetimeTraffic();
         ProxyModeCombo.SelectedIndex = _statusViewModel.SystemProxySelected;
         var proxyMode = (ESysProxyType)_statusViewModel.SystemProxySelected;
         if (_lastTrayProxyMode != proxyMode)
@@ -336,13 +338,12 @@ public sealed partial class MainWindow : Window
                 _ => routeMode
             }
             : routeMode;
-        RoutingRulesButton.IsChecked = outboundMode == OutboundMode.Rules;
+        RoutingRulesButton.IsChecked = outboundMode == OutboundMode.Rules
+            && (runningCoreType == ECoreType.mihomo || OutboundModeSelection.IsMainlandBypass(selectedRouting));
         RoutingGlobalButton.IsChecked = outboundMode == OutboundMode.Global;
-        RoutingDirectButton.IsChecked = outboundMode == OutboundMode.Direct;
         if (routeMode == OutboundMode.Rules && selectedRouting is not null)
         {
             AppManager.Instance.Config.RoutingBasicItem.LastRuleRoutingId = selectedRouting.Id;
-            ToolTipService.SetToolTip(RoutingRulesButton, selectedRouting.DisplayRemarks);
         }
         var trayMenuSignature = CalculateTrayMenuSignature(selectedRouting?.Id, _statusViewModel.SelectedServer?.ID);
         if (!_trayMenuInitialized || trayMenuSignature != _trayMenuSignature)
@@ -1054,13 +1055,39 @@ public sealed partial class MainWindow : Window
             return;
         }
         _lastMemorySampleAt = Stopwatch.GetTimestamp();
-        using var process = Process.GetCurrentProcess();
-        var workingSet = process.WorkingSet64;
-        var managed = Math.Min(workingSet, GC.GetTotalMemory(false));
-        AppMemoryText.Text = (workingSet / 1048576d).ToString("F1", CultureInfo.CurrentCulture);
-        MemoryDetailText.Text = $"托管 {(managed / 1048576d):F1} MB · 应用工作集";
-        ManagedMemoryColumn.Width = new GridLength(Math.Max(1, managed), GridUnitType.Star);
-        OtherMemoryColumn.Width = new GridLength(Math.Max(1, workingSet - managed), GridUnitType.Star);
+        var core = AppManager.Instance.RunningCoreType;
+        var running = Enum.IsDefined(core);
+        var workingSet = running ? CoreManager.Instance.MainWorkingSet64 : 0;
+        UpdateCoreMemoryDisplay(core, workingSet);
+    }
+
+    private void UpdateCoreMemoryDisplay(ECoreType core, long workingSet)
+    {
+        var running = Enum.IsDefined(core);
+        var name = core == ECoreType.sing_box ? "sing-box" : core == ECoreType.Xray ? "Xray" : core.ToString();
+        CoreMemoryTitleText.Text = running ? $"{name} 内存" : "核心内存";
+        var hasMemory = running && workingSet > 0;
+        CoreMemoryText.Text = hasMemory
+            ? (workingSet / 1048576d).ToString("F1", CultureInfo.CurrentCulture) : "--";
+        CoreMemoryUnitText.Visibility = hasMemory ? Visibility.Visible : Visibility.Collapsed;
+        MemoryDetailText.Text = running ? workingSet > 0 ? $"{name} · 运行中" : $"{name} · 正在获取" : "尚未启动核心";
+    }
+
+    private void RefreshLifetimeTraffic()
+    {
+        // StatisticsManager contains both persisted usage and the latest live samples, in KB.
+        var stats = StatisticsManager.Instance.ServerStat?.ToArray() ?? [];
+        var up = stats.Sum(item => Math.Max(0, item.TotalUp));
+        var down = stats.Sum(item => Math.Max(0, item.TotalDown));
+        LifetimeTrafficText.Text = Utils.HumanFy(up + down);
+        LifetimeTrafficDetailText.Text = $"上传 {Utils.HumanFy(up)} · 下载 {Utils.HumanFy(down)}";
+    }
+
+    private void SetDashboardAnimations(bool enabled)
+    {
+        CoreToggleButton.SetAnimationEnabled(enabled);
+        UploadSparkline.SetAnimationEnabled(enabled);
+        DownloadSparkline.SetAnimationEnabled(enabled);
     }
 
     private void TunToggle_Toggled(object sender, RoutedEventArgs e)
@@ -1079,7 +1106,7 @@ public sealed partial class MainWindow : Window
             return;
         }
         _switchingOutboundMode = true;
-        RoutingRulesButton.IsEnabled = RoutingGlobalButton.IsEnabled = RoutingDirectButton.IsEnabled = false;
+        RoutingRulesButton.IsEnabled = RoutingGlobalButton.IsEnabled = false;
         try
         {
             await RunOperationAsync(async () =>
@@ -1091,7 +1118,9 @@ public sealed partial class MainWindow : Window
                     config.RoutingBasicItem.LastRuleRoutingId = current.Id;
                 }
                 var routings = await AppManager.Instance.RoutingItems() ?? [];
-                var routing = OutboundModeSelection.FindRouting(routings, mode, config.RoutingBasicItem.LastRuleRoutingId);
+                var routing = mode == OutboundMode.Rules
+                    ? OutboundModeSelection.FindMainlandBypass(routings)
+                    : OutboundModeSelection.FindRouting(routings, mode, config.RoutingBasicItem.LastRuleRoutingId);
                 if (routing is null)
                 {
                     routing = OutboundModeSelection.CreateRouting(mode, routings.Select(item => item.Sort).DefaultIfEmpty().Max() + 1);
@@ -1119,7 +1148,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _switchingOutboundMode = false;
-            RoutingRulesButton.IsEnabled = RoutingGlobalButton.IsEnabled = RoutingDirectButton.IsEnabled = true;
+            RoutingRulesButton.IsEnabled = RoutingGlobalButton.IsEnabled = true;
             RefreshDashboard();
         }
     }
@@ -1129,7 +1158,10 @@ public sealed partial class MainWindow : Window
         await RefreshOutboundIpAsync();
     }
 
-    private async Task RefreshOutboundIpAsync()
+    private Task RefreshOutboundIpAsync() =>
+        Task.WhenAll(DetectOutboundIpAsync(), RefreshNodeLatencyAsync(false));
+
+    private async Task DetectOutboundIpAsync()
     {
         if (_checkingOutboundIp)
         {
@@ -1216,7 +1248,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await Task.WhenAll(RefreshOutboundIpAsync(), RefreshNodeLatencyAsync(false));
+        await RefreshOutboundIpAsync();
     }
 
     private async Task RefreshNodeLatencyAsync(bool showWarnings)
@@ -1247,11 +1279,13 @@ public sealed partial class MainWindow : Window
         }
 
         _checkingNodeLatency = true;
+        var route = NetworkDiagnosticsRoute.Identity;
         RefreshNodeLatencyButton.IsEnabled = false;
         NodeLatencyText.Text = "检测中...";
         try
         {
             var delay = await _profilesViewModel.TestServerLatencyAsync(indexId);
+            if (_shuttingDown || route != NetworkDiagnosticsRoute.Identity) return;
             if (delay is null)
             {
                 NodeLatencyText.Text = "不可用";
@@ -1267,6 +1301,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            if (_shuttingDown || route != NetworkDiagnosticsRoute.Identity) return;
             NodeLatencyText.Text = "检测失败";
             if (showWarnings)
             {
@@ -1277,6 +1312,7 @@ public sealed partial class MainWindow : Window
         {
             _checkingNodeLatency = false;
             RefreshNodeLatencyButton.IsEnabled = true;
+            if (!_shuttingDown && route != NetworkDiagnosticsRoute.Identity) _ = RefreshNodeLatencyAsync(false);
         }
     }
 
@@ -1662,8 +1698,8 @@ public sealed partial class MainWindow : Window
         var maximum = Math.Max(1, Math.Max(uploads.Max(), downloads.Max()));
         var niceMaximum = NiceCeiling(maximum);
         MainTrafficGraph.UpdateSeries(uploads, downloads, niceMaximum, sampleAge);
-        UploadSparkline.Points = BuildSparkline(uploads, UploadSparklineHost.ActualWidth, UploadSparklineHost.ActualHeight);
-        DownloadSparkline.Points = BuildSparkline(downloads, DownloadSparklineHost.ActualWidth, DownloadSparklineHost.ActualHeight);
+        UploadSparkline.UpdateSeries(uploads, downloads, NiceCeiling(Math.Max(1, uploads.Max())), sampleAge);
+        DownloadSparkline.UpdateSeries(uploads, downloads, NiceCeiling(Math.Max(1, downloads.Max())), sampleAge);
 
         var width = TrafficCanvas.ActualWidth;
         var height = TrafficCanvas.ActualHeight;
@@ -1690,19 +1726,6 @@ public sealed partial class MainWindow : Window
         XAxisMidLabel.Text = "-30s";
         XAxisRightLabel.Text = "现在";
 
-    }
-
-    private static PointCollection BuildSparkline(long[] values, double width, double height)
-    {
-        var points = new PointCollection();
-        if (values.Length < 2 || width <= 0 || height <= 4) return points;
-        var maximum = Math.Max(1, values.Max());
-        for (var index = 0; index < values.Length; index++)
-        {
-            points.Add(new Point(index * width / (values.Length - 1),
-                height - 2 - (height - 4) * Math.Max(0, values[index]) / maximum));
-        }
-        return points;
     }
 
     private static long NiceCeiling(long value)

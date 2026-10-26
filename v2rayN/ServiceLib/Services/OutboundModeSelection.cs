@@ -12,6 +12,12 @@ public static class OutboundModeSelection
     private const string GlobalRoutingId = "freedom-outbound-global";
     private const string DirectRoutingId = "freedom-outbound-direct";
 
+    public static bool IsMainlandBypass(RoutingItem? routing) =>
+        routing is { Remarks: "V4-绕过大陆(Whitelist)" or "规则分流(绕过大陆)" };
+
+    public static RoutingItem? FindMainlandBypass(IEnumerable<RoutingItem> routings) =>
+        routings.FirstOrDefault(item => item.Enabled && IsMainlandBypass(item));
+
     public static OutboundMode GetMode(RoutingItem? routing) => routing switch
     {
         { Id: DirectRoutingId } => OutboundMode.Direct,

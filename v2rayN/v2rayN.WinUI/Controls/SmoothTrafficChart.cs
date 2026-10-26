@@ -11,6 +11,8 @@ using ShapePath = Microsoft.UI.Xaml.Shapes.Path;
 
 namespace v2rayN.WinUI.Controls;
 
+public enum TrafficChartSeries { Both, Upload, Download }
+
 public sealed class SmoothTrafficChart : UserControl
 {
     private readonly Grid _viewport = new();
@@ -31,6 +33,7 @@ public sealed class SmoothTrafficChart : UserControl
     private Visual? _visual;
 
     public int VisibleSampleCount { get; set; } = 60;
+    public TrafficChartSeries Series { get; set; }
 
     public SmoothTrafficChart()
     {
@@ -85,6 +88,8 @@ public sealed class SmoothTrafficChart : UserControl
         _drawing.Height = height;
         _upload.Data = BuildCurve(_uploads, intervalCount, step, height);
         _download.Data = BuildCurve(_downloads, intervalCount, step, height);
+        _upload.Visibility = Series == TrafficChartSeries.Download ? Visibility.Collapsed : Visibility.Visible;
+        _download.Visibility = Series == TrafficChartSeries.Upload ? Visibility.Collapsed : Visibility.Visible;
 
         ElementCompositionPreview.SetIsTranslationEnabled(_drawing, true);
         _visual ??= ElementCompositionPreview.GetElementVisual(_drawing);
