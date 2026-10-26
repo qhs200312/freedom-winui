@@ -125,6 +125,10 @@ public sealed class LanAuthenticationTests
     {
         var executable = Environment.GetEnvironmentVariable(executableVariable);
         if (string.IsNullOrEmpty(executable)) Assert.Skip($"Set {executableVariable} to run the actual core.");
+        // Reserve the witness before selecting the core's consecutive inbound ports.
+        using var witness = new TcpListener(IPAddress.Loopback, 0);
+        witness.Start();
+        var targetPort = ((IPEndPoint)witness.LocalEndpoint).Port;
         var config = CoreConfigTestFactory.CreateConfig(core);
         var inbound = config.Inbound[0];
         inbound.LocalPort = Utils.GetFreePort();
@@ -139,9 +143,6 @@ public sealed class LanAuthenticationTests
         var context = CoreConfigTestFactory.CreateContext(config, CoreConfigTestFactory.CreateSocksNode(core), core);
         var result = await CoreConfigHandler.GenerateClientConfig(context, null);
         Assert.True(result.Success, result.Msg);
-        using var witness = new TcpListener(IPAddress.Loopback, 0);
-        witness.Start();
-        var targetPort = ((IPEndPoint)witness.LocalEndpoint).Port;
         var generated = JsonNode.Parse(result.Data!.ToString()!)!;
         var rules = generated[core == ECoreType.Xray ? "routing" : "route"]!["rules"]!.AsArray();
         rules.Insert(0, core == ECoreType.Xray
