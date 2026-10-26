@@ -258,6 +258,10 @@ public class RoutingNodeSelectionTests
         original.Subid = subid;
         var local = CoreConfigTestFactory.CreateSocksNode(ECoreType.Xray, $"local-{Guid.NewGuid():N}");
         var reference = RoutingNodeSelection.Reference(original.IndexId);
+        config.RoutingBasicItem.CustomRules =
+        [
+            new() { Domain = ["domain:custom.test"], OutboundTag = reference }
+        ];
         var routing = new RoutingItem
         {
             Id = $"subscription-routing-{Guid.NewGuid():N}", Remarks = "refresh-test",
@@ -289,6 +293,7 @@ public class RoutingNodeSelectionTests
             var saved = await SQLiteHelper.Instance.TableAsync<RoutingItem>().FirstAsync(item => item.Id == routing.Id);
             var rules = JsonUtils.Deserialize<List<RulesItem>>(saved.RuleSet)!;
             var expected = remapped ? RoutingNodeSelection.Reference(nodes!.Single().IndexId) : reference;
+            config.RoutingBasicItem.CustomRules.Single().OutboundTag.Should().Be(expected);
             rules.Take(3).Should().OnlyContain(rule => rule.OutboundTag == expected);
             rules[1].Enabled.Should().BeFalse();
             rules[3].OutboundTag.Should().Be(RoutingNodeSelection.Reference(local.IndexId));

@@ -69,14 +69,11 @@
         <!-- Custom left nav: NavigationView selection/hit-testing is unreliable with custom title bars. -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="224" />
+                <ColumnDefinition Width="208" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border
-                Background="{ThemeResource PanelBrush}"
-                BorderBrush="{ThemeResource PanelStrokeBrush}"
-                BorderThickness="0,0,1,0">
+            <Border Background="{ThemeResource AppBackgroundBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -102,12 +99,13 @@
                         SelectionChanged="NavList_SelectionChanged"
                         SelectionMode="Single">
                         <ListView.Resources>
+                            <CornerRadius x:Key="ListViewItemCornerRadius">12</CornerRadius>
                             <SolidColorBrush x:Key="ListViewItemBackground" Color="Transparent" />
-                            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#12808080" />
-                            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#24808080" />
-                            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#24087F86" />
-                            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#30087F86" />
-                            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#40087F86" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#08007FFF" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#18007FFF" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#14007FFF" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#20007FFF" />
+                            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#2C007FFF" />
                         </ListView.Resources>
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
@@ -115,7 +113,7 @@
                                 <Setter Property="MinHeight" Value="44" />
                                 <Setter Property="Padding" Value="12,0" />
                                 <Setter Property="Margin" Value="0,2" />
-                                <Setter Property="CornerRadius" Value="8" />
+                                <Setter Property="CornerRadius" Value="12" />
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListViewItem Tag="dashboard">
@@ -167,360 +165,402 @@
 
             <Grid Grid.Column="1" Background="{ThemeResource AppBackgroundBrush}">
                 <ScrollViewer x:Name="DashboardPage" HorizontalContentAlignment="Center" HorizontalScrollBarVisibility="Disabled" HorizontalScrollMode="Disabled" SizeChanged="DashboardPage_SizeChanged" VerticalScrollBarVisibility="Auto">
-                    <Grid x:Name="DashboardContentGrid" MaxWidth="1600" Padding="32,26,32,30" HorizontalAlignment="Center">
+                    <Grid x:Name="DashboardContentGrid" MaxWidth="1600" Padding="24,18,24,24" HorizontalAlignment="Center" RowSpacing="14">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-
-                        <Grid x:Name="DashboardHeaderGrid" Margin="0,0,0,16">
+                        <Grid x:Name="DashboardHeaderGrid" Margin="0,0,0,6">
+                            <TextBlock FontFamily="Segoe UI Variable Display" FontSize="27" FontWeight="Bold" VerticalAlignment="Center" Text="仪表盘" />
+                            <Border x:Name="HeaderStatusPanel" Width="42" Height="42" CornerRadius="21" HorizontalAlignment="Right" Background="{ThemeResource StatusSurfaceBrush}" ToolTipService.ToolTip="内核运行状态">
+                                <FontIcon x:Name="HeaderStateGlyph" Glyph="&#xE73E;" FontSize="20" Foreground="{ThemeResource StatusForegroundBrush}" />
+                            </Border>
+                        </Grid>
+                        <Grid x:Name="MetricGrid" Grid.Row="1" ColumnSpacing="14" RowSpacing="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition x:Name="MetricColumn3" Width="*" />
+                                <ColumnDefinition x:Name="MetricColumn4" Width="*" />
                             </Grid.ColumnDefinitions>
-                            <VisualStateManager.VisualStateGroups>
-                                <VisualStateGroup>
-                                    <VisualState x:Name="NarrowDashboardHeader">
-                                        <VisualState.StateTriggers><AdaptiveTrigger MinWindowWidth="0" /></VisualState.StateTriggers>
-                                        <VisualState.Setters>
-                                            <Setter Target="HeaderStatusPanel.(Grid.Row)" Value="1" />
-                                            <Setter Target="HeaderStatusPanel.(Grid.Column)" Value="0" />
-                                            <Setter Target="HeaderStatusPanel.(Grid.ColumnSpan)" Value="2" />
-                                            <Setter Target="HeaderStatusPanel.Margin" Value="0,12,0,0" />
-                                            <Setter Target="HeaderStatusPanel.HorizontalAlignment" Value="Left" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                    <VisualState x:Name="WideDashboardHeader">
-                                        <VisualState.StateTriggers><AdaptiveTrigger MinWindowWidth="1180" /></VisualState.StateTriggers>
-                                        <VisualState.Setters>
-                                            <Setter Target="HeaderStatusPanel.(Grid.Row)" Value="0" />
-                                            <Setter Target="HeaderStatusPanel.(Grid.Column)" Value="1" />
-                                            <Setter Target="HeaderStatusPanel.(Grid.ColumnSpan)" Value="1" />
-                                            <Setter Target="HeaderStatusPanel.Margin" Value="0" />
-                                            <Setter Target="HeaderStatusPanel.HorizontalAlignment" Value="Right" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                </VisualStateGroup>
-                            </VisualStateManager.VisualStateGroups>
-                            <StackPanel>
-                                <TextBlock FontFamily="Segoe UI Variable Display" FontSize="28" FontWeight="SemiBold" Text="仪表盘" />
-                                <TextBlock Margin="0,5,0,0" Style="{StaticResource QuietTextStyle}" Text="查看内核运行情况并快速调整常用开关" />
-                            </StackPanel>
-                            <Border x:Name="HeaderStatusPanel" Grid.Column="1" Padding="8,5" Background="{ThemeResource BrandPanelBrush}" BorderBrush="{ThemeResource BrandPanelStrokeBrush}" BorderThickness="1" CornerRadius="6" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Border Padding="12,6" Background="{StaticResource SuccessBrush}" CornerRadius="6">
-                                        <TextBlock x:Name="CoreStatusText" Foreground="White" FontWeight="SemiBold" Text="正在初始化" />
+                            <Border x:Name="ActiveServerCard" Grid.ColumnSpan="2" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="0" Height="202">
+                                <Grid CornerRadius="30">
+                                    <Path HorizontalAlignment="Right" Width="228" Stretch="Fill" Fill="{ThemeResource HeroWashBrush}" Data="M 28,0 L 228,0 L 228,202 L 40,202 C 54,180 3,180 15,152 C 30,122 0,127 7,95 C 15,62 0,60 24,35 C 38,20 28,8 28,0 Z" />
+                                    <Grid Padding="22" ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="102" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE9D9;" FontSize="15" VerticalAlignment="Center" />
+                                            <TextBlock Text="状态" FontSize="13" VerticalAlignment="Center" />
+                                            <Border x:Name="CoreStatusBadge" CornerRadius="12" Padding="10,3" Background="{ThemeResource StatusSurfaceBrush}">
+                                                <TextBlock x:Name="CoreStatusText" FontSize="12" Foreground="{ThemeResource StatusForegroundBrush}" Text="正在初始化" />
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="5">
+                                            <TextBlock x:Name="ActiveServerText" FontFamily="Segoe UI Variable Display" FontSize="24" FontWeight="SemiBold" Text="未选择服务器" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock x:Name="ActiveServerDetailText" Style="{StaticResource QuietTextStyle}" Text="在配置项中选择节点" TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                        <Grid Grid.Row="2" ColumnSpacing="22">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="运行时长" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" />
+                                                <TextBlock x:Name="CoreUptimeText" Text="00:00:00" FontSize="14" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="当前节点" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" />
+                                                <TextBlock x:Name="ActiveServerHeaderText" FontSize="12" Text="等待选择" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <controls:CoreConnectionButton x:Name="CoreToggleButton" Grid.Column="1" Grid.RowSpan="3" VerticalAlignment="Center" HorizontalAlignment="Center" Style="{StaticResource ConnectionButtonStyle}" Click="CoreToggle_Click" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="UploadCard" Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="0" Height="202">
+                                <Grid CornerRadius="30">
+                                    <StackPanel Margin="22,20,22,0" Spacing="6">
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE74A;" FontSize="15" />
+                                                <TextBlock Text="上传" FontSize="13" />
+                                            </StackPanel>
+                                            <TextBlock x:Name="UploadPeakText" HorizontalAlignment="Right" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="峰值 0 B/s" />
+                                        </Grid>
+                                        <TextBlock x:Name="UploadSpeedText" Margin="0,10,0,0" Style="{StaticResource MetricValueStyle}" FontSize="36">
+                                            <Run x:Name="UploadSpeedValueText" Text="0" /><Run x:Name="UploadSpeedUnitText" Text=" B/s" FontSize="12" FontWeight="Normal" />
+                                        </TextBlock>
+                                        <TextBlock x:Name="UploadTotalText" Style="{StaticResource QuietTextStyle}" FontSize="11" Text="累计 0 B" />
+                                    </StackPanel>
+                                    <Grid x:Name="UploadSparklineHost" Height="44" VerticalAlignment="Bottom" SizeChanged="TrafficCanvas_SizeChanged">
+                                        <Polyline x:Name="UploadSparkline" Stroke="{StaticResource UploadChartBrush}" StrokeThickness="2" StrokeLineJoin="Round" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="DownloadCard" Grid.Column="3" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="0" Height="202">
+                                <Grid CornerRadius="30">
+                                    <StackPanel Margin="22,20,22,0" Spacing="6">
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE74B;" FontSize="15" Foreground="{ThemeResource BrandBrush}" />
+                                                <TextBlock Text="下载" FontSize="13" />
+                                            </StackPanel>
+                                            <TextBlock x:Name="DownloadPeakText" HorizontalAlignment="Right" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="峰值 0 B/s" />
+                                        </Grid>
+                                        <TextBlock x:Name="DownloadSpeedText" Margin="0,10,0,0" Style="{StaticResource MetricValueStyle}" FontSize="36">
+                                            <Run x:Name="DownloadSpeedValueText" Text="0" /><Run x:Name="DownloadSpeedUnitText" Text=" B/s" FontSize="12" FontWeight="Normal" />
+                                        </TextBlock>
+                                        <TextBlock x:Name="DownloadTotalText" Style="{StaticResource QuietTextStyle}" FontSize="11" Text="累计 0 B" />
+                                    </StackPanel>
+                                    <Grid x:Name="DownloadSparklineHost" Height="44" VerticalAlignment="Bottom" SizeChanged="TrafficCanvas_SizeChanged">
+                                        <Polyline x:Name="DownloadSparkline" Stroke="{StaticResource DownloadChartBrush}" StrokeThickness="2" StrokeLineJoin="Round" />
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <Grid x:Name="ControlGrid" Grid.Row="2" ColumnSpacing="14" RowSpacing="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition x:Name="ControlColumn3" Width="*" />
+                                <ColumnDefinition x:Name="ControlColumn4" Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="RoutingCard" Grid.ColumnSpan="2" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" CornerRadius="28" Padding="8" MinHeight="64">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel x:Name="RoutingLabelPanel" Orientation="Horizontal" Spacing="8" Margin="12,0,4,0" VerticalAlignment="Center">
+                                        <FontIcon Glyph="&#xE8AB;" FontSize="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="出站模式" FontSize="13" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Grid x:Name="RoutingModeSelector" Grid.Column="1" ColumnSpacing="3" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <RadioButton x:Name="RoutingRulesButton" GroupName="OutboundMode" Tag="Rules" Checked="OutboundMode_Checked" Style="{StaticResource OutboundModeButtonStyle}" AutomationProperties.Name="规则分流">
+                                            <StackPanel Orientation="Horizontal" Spacing="7"><FontIcon Glyph="&#xE80A;" FontSize="14" VerticalAlignment="Center" /><TextBlock Text="规则" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel>
+                                        </RadioButton>
+                                        <RadioButton x:Name="RoutingGlobalButton" Grid.Column="1" GroupName="OutboundMode" Tag="Global" Checked="OutboundMode_Checked" Style="{StaticResource OutboundModeButtonStyle}" AutomationProperties.Name="全局代理" ToolTipService.ToolTip="全局代理">
+                                            <StackPanel Orientation="Horizontal" Spacing="7"><FontIcon Glyph="&#xE774;" FontSize="14" VerticalAlignment="Center" /><TextBlock Text="全局" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel>
+                                        </RadioButton>
+                                        <RadioButton x:Name="RoutingDirectButton" Grid.Column="2" GroupName="OutboundMode" Tag="Direct" Checked="OutboundMode_Checked" Style="{StaticResource OutboundModeButtonStyle}" AutomationProperties.Name="直连模式" ToolTipService.ToolTip="默认直连，自定义分流规则优先">
+                                            <StackPanel Orientation="Horizontal" Spacing="7"><FontIcon Glyph="&#xEA3A;" FontSize="14" VerticalAlignment="Center" /><TextBlock Text="直连" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel>
+                                        </RadioButton>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="SystemProxyCard" Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" CornerRadius="28" Padding="14,10" MinHeight="64">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="32" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="32" Height="32" CornerRadius="12" Background="{ThemeResource BrandBrush}">
+                                        <FontIcon Glyph="&#xE774;" FontSize="17" Foreground="White" />
                                     </Border>
-                                    <TextBlock x:Name="ActiveServerHeaderText" MaxWidth="320" VerticalAlignment="Center" Foreground="{ThemeResource BrandBrush}" TextTrimming="CharacterEllipsis" />
-                                    <Button x:Name="StopCoreButton" Click="StopCore_Click" ToolTipService.ToolTip="停止核心">
-                                        <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Stop" /><TextBlock Text="停止" /></StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="系统代理" FontSize="13" />
+                                        <ComboBox x:Name="ProxyModeCombo" MinHeight="23" Padding="0" FontSize="11" HorizontalAlignment="Stretch" Background="Transparent" BorderThickness="0" SelectionChanged="ProxyModeCombo_SelectionChanged" AutomationProperties.Name="系统代理模式">
+                                            <ComboBoxItem Content="关闭系统代理" Tag="0" />
+                                            <ComboBoxItem Content="自动配置系统代理" Tag="1" />
+                                            <ComboBoxItem Content="保持系统代理" Tag="2" />
+                                            <ComboBoxItem Content="PAC 模式" Tag="3" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="TunCard" Grid.Column="3" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" CornerRadius="28" Padding="14,10" MinHeight="64">
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="32" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Width="32" Height="32" CornerRadius="12" Background="{ThemeResource BrandBrush}">
+                                        <FontIcon Glyph="&#xE83D;" FontSize="17" Foreground="White" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                        <TextBlock Text="虚拟网卡" FontSize="13" />
+                                        <TextBlock x:Name="TunStateText" Text="未开启" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" />
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="2" x:Name="TunToggle" MinWidth="0" OffContent="" OnContent="" Toggled="TunToggle_Toggled" AutomationProperties.Name="虚拟网卡" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <Grid x:Name="DetailGrid" Grid.Row="3" ColumnSpacing="14" RowSpacing="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition x:Name="DetailColumn3" Width="*" />
+                                <ColumnDefinition x:Name="DetailColumn4" Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="OutboundIpCard" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="20,16" MinHeight="176">
+                                <Grid RowSpacing="7">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="&#xE774;" FontSize="14" />
+                                            <TextBlock Text="出口 IP" FontSize="13" />
+                                        </StackPanel>
+                                        <ProgressRing x:Name="OutboundIpProgress" Width="16" Height="16" HorizontalAlignment="Right" IsActive="False" />
+                                    </Grid>
+                                    <TextBlock x:Name="OutboundIpText" Grid.Row="1" FontFamily="Segoe UI Variable Display" FontSize="20" FontWeight="SemiBold" Text="--" TextTrimming="CharacterEllipsis" IsTextSelectionEnabled="True" />
+                                    <Grid Grid.Row="2" ColumnSpacing="8" VerticalAlignment="Top">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                        <controls:CountryFlag x:Name="OutboundCountryFlag" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="OutboundIpDetailText" Grid.Column="1" Style="{StaticResource QuietTextStyle}" FontSize="11" Text="等待检测" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </Grid>
+                                    <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="5">
+                                        <Button x:Name="RefreshOutboundIpButton" Style="{StaticResource DashboardIconButtonStyle}" Click="RefreshOutboundIp_Click" ToolTipService.ToolTip="重新检测出口 IP">
+                                            <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Name="RefreshNodeLatencyButton" Style="{StaticResource DashboardIconButtonStyle}" Click="RefreshNodeLatency_Click" ToolTipService.ToolTip="检测节点延迟">
+                                            <FontIcon Glyph="&#xE917;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Name="CopyOutboundIpButton" Style="{StaticResource DashboardIconButtonStyle}" Click="CopyOutboundIp_Click" IsEnabled="False" ToolTipService.ToolTip="复制出口 IP">
+                                            <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                        </Button>
+                                        <Button x:Name="OutboundIpDetailsButton" Style="{StaticResource DashboardIconButtonStyle}" Click="OutboundIpDetails_Click" IsEnabled="False" ToolTipService.ToolTip="详细 IP 信息">
+                                            <FontIcon Glyph="&#xE712;" FontSize="14" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="TotalTrafficCard" Grid.Column="1" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="20,16" MinHeight="176">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE9D9;" FontSize="14" />
+                                        <TextBlock Text="代理流量" FontSize="13" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="5">
+                                        <TextBlock x:Name="TotalTrafficText" Style="{StaticResource MetricValueStyle}" FontSize="26" Text="0 B" />
+                                        <TextBlock x:Name="TotalTrafficDetailText" Style="{StaticResource QuietTextStyle}" FontSize="11" Text="上传 0 B · 下载 0 B" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <Border Grid.Row="2" Background="{ThemeResource InsetBrush}" CornerRadius="12" Padding="10,7">
+                                        <TextBlock Text="本次运行累计" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="NetworkStatusCard" Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="20,16" MinHeight="176">
+                                <Grid RowSpacing="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE73E;" FontSize="14" />
+                                        <TextBlock Text="网络状态" FontSize="13" />
+                                    </StackPanel>
+                                    <Border Grid.Row="1" Background="{ThemeResource InsetBrush}" CornerRadius="16" Padding="12,10" VerticalAlignment="Center">
+                                        <Grid>
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="节点延迟" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" />
+                                                <TextBlock x:Name="NodeLatencyText" Text="未测试" FontSize="17" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                            <FontIcon HorizontalAlignment="Right" Glyph="&#xE839;" Foreground="{ThemeResource BrandBrush}" FontSize="22" />
+                                        </Grid>
+                                    </Border>
+                                    <TextBlock x:Name="UdpInterceptionStatusText" Grid.Row="2" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" Text="UDP 接管：关闭" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </Border>
+                            <Border x:Name="MemoryCard" Grid.Column="3" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="20,16" MinHeight="176">
+                                <Grid RowSpacing="8">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE950;" FontSize="14" />
+                                        <TextBlock Text="内存信息" FontSize="13" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                        <TextBlock x:Name="AppMemoryText" Text="--" FontSize="26" FontWeight="SemiBold" />
+                                        <TextBlock Text="MB" FontSize="11" VerticalAlignment="Bottom" Margin="0,0,0,5" />
+                                    </StackPanel>
+                                    <Border Grid.Row="2" Height="7" CornerRadius="3" Background="{ThemeResource InsetBrush}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition x:Name="ManagedMemoryColumn" Width="*" />
+                                                <ColumnDefinition x:Name="OtherMemoryColumn" Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border CornerRadius="3" Background="{ThemeResource BrandBrush}" />
+                                            <Border Grid.Column="1" CornerRadius="0,3,3,0" Background="{StaticResource UploadChartBrush}" />
+                                        </Grid>
+                                    </Border>
+                                    <TextBlock x:Name="MemoryDetailText" Grid.Row="3" Text="应用工作集 · 实时更新" FontSize="11" Foreground="{ThemeResource MutedTextBrush}" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <Grid x:Name="BottomGrid" Grid.Row="4" ColumnSpacing="14" RowSpacing="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.7*" />
+                                <ColumnDefinition x:Name="BottomColumn2" Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="TrafficChartCard" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="20,16" MinHeight="222">
+                                <Grid RowSpacing="12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border CornerRadius="14" Background="{ThemeResource BrandBrush}" Padding="12,6">
+                                                <TextBlock Text="实时流量" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+                                            </Border>
+                                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                                <TextBlock Foreground="{StaticResource UploadChartBrush}" Text="● 上传" FontSize="11" />
+                                                <TextBlock Foreground="{StaticResource DownloadChartBrush}" Text="● 下载" FontSize="11" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource QuietTextStyle}" FontSize="11" Text="最近 60 秒" />
+                                    </Grid>
+                                    <Grid Grid.Row="1" MinHeight="144">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid x:Name="YAxisLabelPanel" Margin="0,0,8,0">
+                                            <TextBlock x:Name="YAxisTopLabel" HorizontalAlignment="Right" VerticalAlignment="Top" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="1 KB/s" />
+                                            <TextBlock x:Name="YAxisMidLabel" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="0.5 KB/s" />
+                                            <TextBlock x:Name="YAxisBottomLabel" HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="0 B/s" />
+                                        </Grid>
+                                        <Grid x:Name="TrafficCanvas" Grid.Column="1" MinHeight="120" SizeChanged="TrafficCanvas_SizeChanged">
+                                            <Line x:Name="AxisBottom" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" />
+                                            <Line x:Name="AxisMiddle" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" StrokeDashArray="3,4" />
+                                            <Line x:Name="AxisTop" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" StrokeDashArray="3,4" />
+                                            <controls:SmoothTrafficChart x:Name="MainTrafficGraph" VisibleSampleCount="60" />
+                                        </Grid>
+                                        <Grid Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
+                                            <TextBlock x:Name="XAxisLeftLabel" HorizontalAlignment="Left" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="-60s" />
+                                            <TextBlock x:Name="XAxisMidLabel" HorizontalAlignment="Center" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="-30s" />
+                                            <TextBlock x:Name="XAxisRightLabel" HorizontalAlignment="Right" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" Text="现在" />
+                                        </Grid>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                            <Border x:Name="QuickAccessCard" Grid.Column="1" Style="{StaticResource DashboardCardStyle}" Translation="0,0,8" Padding="20,16" MinHeight="222">
+                                <StackPanel Spacing="10">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,2">
+                                        <FontIcon Glyph="&#xE8A9;" FontSize="15" />
+                                        <TextBlock Text="快捷入口" FontSize="13" />
+                                    </StackPanel>
+                                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,10" Background="{ThemeResource InsetBrush}" BorderThickness="0" CornerRadius="18" Tag="profiles" Click="DashboardNavigate_Click">
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                                <FontIcon Glyph="&#xE8A5;" Foreground="{ThemeResource BrandBrush}" FontSize="19" />
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="节点与配置" FontSize="13" />
+                                                    <TextBlock Text="选择、导入与管理服务器" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <FontIcon HorizontalAlignment="Right" Glyph="&#xE76C;" FontSize="11" />
+                                        </Grid>
                                     </Button>
-                                    <Button x:Name="ReloadCoreButton" Click="ReloadCore_Click" ToolTipService.ToolTip="启动核心">
-                                        <StackPanel Orientation="Horizontal" Spacing="6"><SymbolIcon Symbol="Play" /><TextBlock x:Name="ReloadCoreButtonText" Text="启动" /></StackPanel>
+                                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,10" Background="{ThemeResource InsetBrush}" BorderThickness="0" CornerRadius="18" Tag="unlock" Click="DashboardNavigate_Click">
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                                <FontIcon Glyph="&#xE774;" Foreground="{ThemeResource BrandBrush}" FontSize="19" />
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Text="服务可用性" FontSize="13" />
+                                                    <TextBlock Text="检测流媒体与 AI 服务" FontSize="10" Foreground="{ThemeResource MutedTextBrush}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <FontIcon HorizontalAlignment="Right" Glyph="&#xE76C;" FontSize="11" />
+                                        </Grid>
+                                    </Button>
+                                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="12,8" Background="Transparent" BorderThickness="0" CornerRadius="14" Tag="logs" Click="DashboardNavigate_Click">
+                                        <Grid>
+                                            <TextBlock Text="查看运行日志" FontSize="12" Foreground="{ThemeResource MutedTextBrush}" />
+                                            <FontIcon HorizontalAlignment="Right" Glyph="&#xE76C;" FontSize="11" />
+                                        </Grid>
                                     </Button>
                                 </StackPanel>
                             </Border>
                         </Grid>
-
-                        <Grid x:Name="MetricGrid" Grid.Row="1" ColumnSpacing="12" RowSpacing="12">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition x:Name="MetricColumn1" Width="*" />
-                                    <ColumnDefinition x:Name="MetricColumn2" Width="*" />
-                                    <ColumnDefinition x:Name="MetricColumn3" Width="*" />
-                                    <ColumnDefinition x:Name="MetricColumn4" Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <VisualStateManager.VisualStateGroups>
-                                    <VisualStateGroup>
-                                        <VisualState x:Name="CompactMetricGrid">
-                                            <VisualState.StateTriggers><AdaptiveTrigger MinWindowWidth="0" /></VisualState.StateTriggers>
-                                            <VisualState.Setters>
-                                                <Setter Target="MetricColumn3.Width" Value="0" />
-                                                <Setter Target="MetricColumn4.Width" Value="0" />
-                                                <Setter Target="TotalTrafficCard.(Grid.Row)" Value="1" />
-                                                <Setter Target="TotalTrafficCard.(Grid.Column)" Value="0" />
-                                                <Setter Target="ActiveServerCard.(Grid.Row)" Value="1" />
-                                                <Setter Target="ActiveServerCard.(Grid.Column)" Value="1" />
-                                            </VisualState.Setters>
-                                        </VisualState>
-                                        <VisualState x:Name="WideMetricGrid">
-                                            <VisualState.StateTriggers><AdaptiveTrigger MinWindowWidth="1180" /></VisualState.StateTriggers>
-                                            <VisualState.Setters>
-                                                <Setter Target="MetricColumn3.Width" Value="*" />
-                                                <Setter Target="MetricColumn4.Width" Value="*" />
-                                                <Setter Target="TotalTrafficCard.(Grid.Row)" Value="0" />
-                                                <Setter Target="TotalTrafficCard.(Grid.Column)" Value="2" />
-                                                <Setter Target="ActiveServerCard.(Grid.Row)" Value="0" />
-                                                <Setter Target="ActiveServerCard.(Grid.Column)" Value="3" />
-                                            </VisualState.Setters>
-                                        </VisualState>
-                                    </VisualStateGroup>
-                                </VisualStateManager.VisualStateGroups>
-                                <Border Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
-                                    <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="下载速度" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Download" /></Grid>
-                                        <TextBlock x:Name="DownloadSpeedText" Style="{StaticResource MetricValueStyle}" Text="0 B/s" />
-                                        <TextBlock x:Name="DownloadTotalText" Style="{StaticResource QuietTextStyle}" Text="本次 0 B" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Column="1" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
-                                    <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="上传速度" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Upload" /></Grid>
-                                        <TextBlock x:Name="UploadSpeedText" Style="{StaticResource MetricValueStyle}" Text="0 B/s" />
-                                        <TextBlock x:Name="UploadTotalText" Style="{StaticResource QuietTextStyle}" Text="本次 0 B" />
-                                    </StackPanel>
-                                </Border>
-                                <Border x:Name="TotalTrafficCard" Grid.Column="2" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
-                                    <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="代理流量" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Globe" /></Grid>
-                                        <TextBlock x:Name="TotalTrafficText" Style="{StaticResource MetricValueStyle}" Text="0 B" />
-                                        <TextBlock x:Name="TotalTrafficDetailText" Style="{StaticResource QuietTextStyle}" Text="上传 0 B · 下载 0 B" />
-                                    </StackPanel>
-                                </Border>
-                                <Border x:Name="ActiveServerCard" Grid.Column="3" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="138">
-                                    <StackPanel Spacing="8">
-                                        <Grid><TextBlock Style="{StaticResource QuietTextStyle}" Text="当前服务器" /><SymbolIcon HorizontalAlignment="Right" Foreground="{StaticResource BrandBrush}" Symbol="Globe" /></Grid>
-                                        <TextBlock x:Name="ActiveServerText" Style="{StaticResource MetricValueStyle}" FontSize="20" Text="未选择" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock x:Name="ActiveServerDetailText" Style="{StaticResource QuietTextStyle}" Text="-" TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                </Border>
-                        </Grid>
-
-                        <Grid x:Name="ControlGrid" Grid.Row="2" Margin="0,12,0,0" ColumnSpacing="12" RowSpacing="12">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition x:Name="ControlColumn1" Width="*" />
-                                    <ColumnDefinition x:Name="ControlColumn2" Width="*" />
-                                    <ColumnDefinition x:Name="ControlColumn3" Width="*" />
-                                    <ColumnDefinition x:Name="ControlColumn4" Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <VisualStateManager.VisualStateGroups>
-                                    <VisualStateGroup>
-                                        <VisualState x:Name="CompactControlGrid">
-                                            <VisualState.StateTriggers><AdaptiveTrigger MinWindowWidth="0" /></VisualState.StateTriggers>
-                                            <VisualState.Setters>
-                                                <Setter Target="ControlColumn3.Width" Value="0" />
-                                                <Setter Target="ControlColumn4.Width" Value="0" />
-                                                <Setter Target="RoutingCard.(Grid.Row)" Value="1" />
-                                                <Setter Target="RoutingCard.(Grid.Column)" Value="0" />
-                                                <Setter Target="OutboundIpCard.(Grid.Row)" Value="1" />
-                                                <Setter Target="OutboundIpCard.(Grid.Column)" Value="1" />
-                                            </VisualState.Setters>
-                                        </VisualState>
-                                        <VisualState x:Name="WideControlGrid">
-                                            <VisualState.StateTriggers><AdaptiveTrigger MinWindowWidth="1180" /></VisualState.StateTriggers>
-                                            <VisualState.Setters>
-                                                <Setter Target="ControlColumn3.Width" Value="*" />
-                                                <Setter Target="ControlColumn4.Width" Value="*" />
-                                                <Setter Target="RoutingCard.(Grid.Row)" Value="0" />
-                                                <Setter Target="RoutingCard.(Grid.Column)" Value="2" />
-                                                <Setter Target="OutboundIpCard.(Grid.Row)" Value="0" />
-                                                <Setter Target="OutboundIpCard.(Grid.Column)" Value="3" />
-                                            </VisualState.Setters>
-                                        </VisualState>
-                                    </VisualStateGroup>
-                                </VisualStateManager.VisualStateGroups>
-                                <Border Grid.ColumnSpan="2" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
-                                    <Grid RowSpacing="10">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <TextBlock FontWeight="SemiBold" Text="网络模式" />
-                                        <TextBlock Grid.Row="1" Style="{StaticResource QuietTextStyle}" Text="配置系统代理与虚拟网卡接管" />
-                                        <Grid Grid.Row="2" ColumnSpacing="16">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="1" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <Grid RowSpacing="5">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
-                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="系统代理" />
-                                                <ComboBox Grid.Row="1" x:Name="ProxyModeCombo" HorizontalAlignment="Stretch" SelectionChanged="ProxyModeCombo_SelectionChanged">
-                                                    <ComboBoxItem Content="清除系统代理" Tag="0" />
-                                                    <ComboBoxItem Content="自动配置系统代理" Tag="1" />
-                                                    <ComboBoxItem Content="不改变系统代理" Tag="2" />
-                                                    <ComboBoxItem Content="PAC 模式" Tag="3" />
-                                                </ComboBox>
-                                            </Grid>
-                                            <Border Grid.Column="1" Background="{ThemeResource PanelStrokeBrush}" />
-                                            <Grid Grid.Column="2" RowSpacing="5">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="Auto" />
-                                                </Grid.RowDefinitions>
-                                                <TextBlock Foreground="{ThemeResource MutedTextBrush}" FontSize="12" Text="虚拟网卡" />
-                                                <ToggleSwitch Grid.Row="1" x:Name="TunToggle" OffContent="关闭" OnContent="开启" Toggled="TunToggle_Toggled" />
-                                            </Grid>
-                                        </Grid>
-                                        <TextBlock x:Name="UdpInterceptionStatusText" Grid.Row="3"
-                                            TextWrapping="Wrap" Style="{StaticResource QuietTextStyle}" Text="UDP 接管：关闭" />
-                                    </Grid>
-                                </Border>
-                                <Border x:Name="RoutingCard" Grid.Column="2" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
-                                    <StackPanel Spacing="10">
-                                        <TextBlock FontWeight="SemiBold" Text="路由模式" />
-                                        <TextBlock Style="{StaticResource QuietTextStyle}" Text="选择绕过大陆或全局规则" />
-                                        <ComboBox x:Name="RoutingCombo" DisplayMemberPath="DisplayRemarks" SelectionChanged="RoutingCombo_SelectionChanged" />
-                                    </StackPanel>
-                                </Border>
-                                <Border x:Name="OutboundIpCard" Grid.Column="3" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="146">
-                                    <Grid RowSpacing="8">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <Grid>
-                                            <TextBlock FontWeight="SemiBold" Text="出口 IP" />
-                                            <ProgressRing x:Name="OutboundIpProgress" Width="18" Height="18" HorizontalAlignment="Right" IsActive="False" />
-                                        </Grid>
-                                        <Grid Grid.Row="1" ColumnSpacing="8">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                            <controls:CountryFlag x:Name="OutboundCountryFlag" VerticalAlignment="Center" />
-                                            <TextBlock x:Name="OutboundIpDetailText" Grid.Column="1" Style="{StaticResource QuietTextStyle}" Text="等待检测" TextWrapping="Wrap" VerticalAlignment="Center" />
-                                        </Grid>
-                                        <Grid Grid.Row="2" ColumnSpacing="10">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock x:Name="OutboundIpText" VerticalAlignment="Center" FontFamily="Cascadia Mono" FontSize="16" FontWeight="SemiBold" Text="--" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                                            <StackPanel Grid.Column="1" HorizontalAlignment="Right" Spacing="1">
-                                                <TextBlock HorizontalAlignment="Right" Foreground="{ThemeResource MutedTextBrush}" FontSize="11" Text="节点延迟" />
-                                                <TextBlock x:Name="NodeLatencyText" HorizontalAlignment="Right" FontFamily="Cascadia Mono" FontSize="13" FontWeight="SemiBold" Text="未测试" />
-                                            </StackPanel>
-                                        </Grid>
-                                        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
-                                            <Button x:Name="RefreshOutboundIpButton" Width="32" Height="32" Padding="4" Click="RefreshOutboundIp_Click" ToolTipService.ToolTip="重新检测出口 IP">
-                                                <SymbolIcon Symbol="Refresh" />
-                                            </Button>
-                                            <Button x:Name="RefreshNodeLatencyButton" Width="32" Height="32" Padding="4" Click="RefreshNodeLatency_Click" ToolTipService.ToolTip="检测当前节点真实延迟">
-                                                <SymbolIcon Symbol="Clock" />
-                                            </Button>
-                                            <Button x:Name="CopyOutboundIpButton" Width="32" Height="32" Padding="4" Click="CopyOutboundIp_Click" IsEnabled="False" ToolTipService.ToolTip="复制出口 IP">
-                                                <SymbolIcon Symbol="Copy" />
-                                            </Button>
-                                            <Button x:Name="OutboundIpDetailsButton" Width="32" Height="32" Padding="4" Click="OutboundIpDetails_Click" IsEnabled="False" ToolTipService.ToolTip="详细 IP 信息">
-                                                <SymbolIcon Symbol="More" />
-                                            </Button>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                        </Grid>
-
-                        <Border Grid.Row="3" Margin="0,16,0,0" Style="{StaticResource PanelStyle}" Padding="20" MinHeight="300">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-                                <Grid>
-                                    <StackPanel Orientation="Horizontal" Spacing="16">
-                                        <TextBlock Foreground="{StaticResource SuccessBrush}" Text="● 上传" />
-                                        <TextBlock Foreground="{StaticResource WarningBrush}" Text="● 下载" />
-                                    </StackPanel>
-                                    <TextBlock
-                                        HorizontalAlignment="Right"
-                                        Style="{StaticResource QuietTextStyle}"
-                                        Text="最近 60 秒 · 速度 (B/s)" />
-                                </Grid>
-                                <Grid Grid.Row="1" Margin="0,14,0,0" MinHeight="220">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="72" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-
-                                    <!-- Y-axis labels (speed) -->
-                                    <Grid x:Name="YAxisLabelPanel" Grid.Row="0" Margin="0,0,8,0">
-                                        <TextBlock
-                                            x:Name="YAxisTopLabel"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Top"
-                                            FontFamily="Cascadia Mono"
-                                            FontSize="11"
-                                            Foreground="{ThemeResource MutedTextBrush}"
-                                            Text="1.0 KB/s" />
-                                        <TextBlock
-                                            x:Name="YAxisMidLabel"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Center"
-                                            FontFamily="Cascadia Mono"
-                                            FontSize="11"
-                                            Foreground="{ThemeResource MutedTextBrush}"
-                                            Text="0.5 KB/s" />
-                                        <TextBlock
-                                            x:Name="YAxisBottomLabel"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Bottom"
-                                            FontFamily="Cascadia Mono"
-                                            FontSize="11"
-                                            Foreground="{ThemeResource MutedTextBrush}"
-                                            Text="0 B/s" />
-                                    </Grid>
-
-                                    <Grid
-                                        x:Name="TrafficCanvas"
-                                        Grid.Row="0"
-                                        Grid.Column="1"
-                                        MinHeight="200"
-                                        SizeChanged="TrafficCanvas_SizeChanged">
-                                        <Line x:Name="AxisBottom" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" />
-                                        <Line x:Name="AxisMiddle" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" StrokeDashArray="3,4" />
-                                        <Line x:Name="AxisTop" Stroke="{ThemeResource PanelStrokeBrush}" StrokeThickness="1" StrokeDashArray="3,4" />
-                                        <controls:SmoothTrafficChart x:Name="MainTrafficGraph" VisibleSampleCount="60" />
-                                    </Grid>
-
-                                    <!-- X-axis labels (time) -->
-                                    <Grid Grid.Row="1" Grid.Column="1" Margin="0,8,0,0">
-                                        <TextBlock
-                                            x:Name="XAxisLeftLabel"
-                                            HorizontalAlignment="Left"
-                                            FontFamily="Cascadia Mono"
-                                            FontSize="11"
-                                            Foreground="{ThemeResource MutedTextBrush}"
-                                            Text="-60s" />
-                                        <TextBlock
-                                            x:Name="XAxisMidLabel"
-                                            HorizontalAlignment="Center"
-                                            FontFamily="Cascadia Mono"
-                                            FontSize="11"
-                                            Foreground="{ThemeResource MutedTextBrush}"
-                                            Text="-30s" />
-                                        <TextBlock
-                                            x:Name="XAxisRightLabel"
-                                            HorizontalAlignment="Right"
-                                            FontFamily="Cascadia Mono"
-                                            FontSize="11"
-                                            Foreground="{ThemeResource MutedTextBrush}"
-                                            Text="现在" />
-                                    </Grid>
-                                </Grid>
-                            </Grid>
-                        </Border>
                     </Grid>
                 </ScrollViewer>
 
@@ -566,6 +606,7 @@
                                     <MenuFlyoutItem Text="WireGuard" Tag="wireguard" Click="AddProtocol_Click" />
                                     <MenuFlyoutItem Text="AnyTLS" Tag="anytls" Click="AddProtocol_Click" />
                                     <MenuFlyoutItem Text="NaiveProxy" Tag="naive" Click="AddProtocol_Click" />
+                                    <MenuFlyoutItem Text="Nowhere" Tag="nowhere" Click="AddProtocol_Click" />
                                     <MenuFlyoutSeparator />
                                     <MenuFlyoutItem Text="自定义配置" Tag="custom" Click="AddProtocol_Click" />
                                     <MenuFlyoutItem Text="策略组" Tag="policy" Click="AddProtocol_Click" />

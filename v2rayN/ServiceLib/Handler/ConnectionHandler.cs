@@ -20,7 +20,7 @@ public static class ConnectionHandler
     /// </summary>
     private static async Task<string?> GetIPInfo()
     {
-        var webProxy = await GetWebProxy();
+        var webProxy = GetLocalWebProxy();
 
         var ipInfo = await GetIPInfo(webProxy);
         return ipInfo?.ToString() ?? Global.None;
@@ -34,7 +34,7 @@ public static class ConnectionHandler
         var responseTime = -1;
         try
         {
-            var webProxy = await GetWebProxy();
+            var webProxy = GetLocalWebProxy();
 
             for (var i = 0; i < 2; i++)
             {
@@ -57,10 +57,22 @@ public static class ConnectionHandler
     /// <summary>
     /// Creates local SOCKS proxy instance.
     /// </summary>
-    private static async Task<WebProxy?> GetWebProxy()
+    public static WebProxy GetLocalWebProxy()
     {
         var port = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
-        return new WebProxy($"socks5://{Global.Loopback}:{port}");
+        return new WebProxy($"socks5://{Global.Loopback}:{port}")
+        {
+            Credentials = GetLocalProxyCredentials(AppManager.Instance.Config)
+        };
+    }
+
+    public static NetworkCredential? GetLocalProxyCredentials(Config? config)
+    {
+        var inbound = config?.Inbound?.FirstOrDefault();
+        return inbound is { AllowLANConn: true, NewPort4LAN: false }
+            && inbound.User.IsNotEmpty() && inbound.Pass.IsNotEmpty()
+                ? new NetworkCredential(inbound.User, inbound.Pass)
+                : null;
     }
 
     /// <summary>

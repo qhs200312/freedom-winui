@@ -80,6 +80,11 @@ public class AddServerViewModel : MyReactiveObject
     [Reactive]
     public bool NaiveQuic { get; set; }
 
+    [Reactive] public string NowhereTransport { get; set; }
+    [Reactive] public bool NowhereMorph { get; set; }
+    [Reactive] public int? NowhereUploadMbps { get; set; }
+    [Reactive] public int? NowhereDownloadMbps { get; set; }
+
     [Reactive]
     public string HttpHeadersJson { get; set; }
 
@@ -313,6 +318,10 @@ public class AddServerViewModel : MyReactiveObject
         CongestionControl = protocolExtra.CongestionControl ?? string.Empty;
         InsecureConcurrency = protocolExtra.InsecureConcurrency > 0 ? protocolExtra.InsecureConcurrency : null;
         NaiveQuic = protocolExtra.NaiveQuic ?? false;
+        NowhereTransport = protocolExtra.NowhereTransport ?? "tcp";
+        NowhereMorph = protocolExtra.NowhereMorph ?? true;
+        NowhereUploadMbps = protocolExtra.NowhereUploadMbps;
+        NowhereDownloadMbps = protocolExtra.NowhereDownloadMbps;
         HttpHeadersJson = protocolExtra.HttpHeaders ?? string.Empty;
         Hy2RealmUrl = protocolExtra.Hy2RealmUrl ?? string.Empty;
         GeckoMinPacketSize = protocolExtra.GeckoMinPacketSize.ToInt();
@@ -434,12 +443,21 @@ public class AddServerViewModel : MyReactiveObject
             CongestionControl = CongestionControl.NullIfEmpty(),
             InsecureConcurrency = InsecureConcurrency > 0 ? InsecureConcurrency : null,
             NaiveQuic = NaiveQuic ? true : null,
+            NowhereTransport = SelectedSource.ConfigType == EConfigType.Nowhere ? NowhereTransport.NullIfEmpty() : null,
+            NowhereMorph = SelectedSource.ConfigType == EConfigType.Nowhere ? NowhereMorph : null,
+            NowhereUploadMbps = SelectedSource.ConfigType == EConfigType.Nowhere ? NowhereUploadMbps : null,
+            NowhereDownloadMbps = SelectedSource.ConfigType == EConfigType.Nowhere ? NowhereDownloadMbps : null,
             Hy2RealmUrl = realm?.ToUri().NullIfEmpty(),
             GeckoMinPacketSize = GeckoMinPacketSize > 0 ? GeckoMinPacketSize.ToString() : null,
             GeckoMaxPacketSize = GeckoMaxPacketSize > 0 ? GeckoMaxPacketSize.ToString() : null,
         });
         SelectedSource.SetTransportExtra(transport);
 
+        if (SelectedSource.ConfigType == EConfigType.Nowhere && NowhereFmt.Validate(SelectedSource) is { } nowhereError)
+        {
+            NoticeManager.Instance.Enqueue(nowhereError);
+            return;
+        }
         if (await ConfigHandler.AddServer(_config, SelectedSource) == 0)
         {
             NoticeManager.Instance.Enqueue(ResUI.OperationSuccess);

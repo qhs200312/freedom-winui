@@ -288,6 +288,15 @@ public sealed class CoreInfoManager
                         { "MIERU_CONFIG_JSON_FILE", "{0}" },
                     },
                 },
+                new CoreInfo
+                {
+                    CoreType = ECoreType.nowhere,
+                    CoreExes = ["nowhere"],
+                    Arguments = "{0}",
+                    Url = GetCoreUrl(ECoreType.nowhere),
+                    VersionArg = "--version",
+                    Match = "nowhere",
+                },
         ];
     }
 

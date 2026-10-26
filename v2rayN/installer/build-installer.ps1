@@ -5,6 +5,7 @@ param(
     [string]$RuntimeIdentifier = 'win-x64',
     [string]$CoreArchive,
     [string]$XrayArchive,
+    [string]$NowhereArchive,
     [string]$SourceRevisionId,
     [string]$UdpCacheDirectory = (Join-Path $PSScriptRoot '..\artifacts\udp-cache'),
     [string]$IsccPath
@@ -57,14 +58,16 @@ New-Item -ItemType Directory -Path $publishDir, $updaterDir, $coreExtractDir, $p
 
 & dotnet publish (Join-Path $sourceRoot 'v2rayN.WinUI\v2rayN.WinUI.csproj') `
     -c Release -r $RuntimeIdentifier --self-contained true `
-    -p:Platform=x64 -p:Version=$Version -p:PublishSingleFile=false @revisionArguments -warnaserror -o $publishDir
+    -p:Platform=x64 -p:Version=$Version -p:InformationalVersion=$Version `
+    -p:IncludeSourceRevisionInInformationalVersion=false -p:PublishSingleFile=false @revisionArguments -warnaserror -o $publishDir
 if ($LASTEXITCODE -ne 0) {
     throw 'WinUI publish failed.'
 }
 
 & dotnet publish (Join-Path $sourceRoot 'AmazTool\AmazTool.csproj') `
     -c Release -r $RuntimeIdentifier --self-contained true `
-    -p:Version=$Version -p:PublishSingleFile=true @revisionArguments -warnaserror -o $updaterDir
+    -p:Version=$Version -p:InformationalVersion=$Version `
+    -p:IncludeSourceRevisionInInformationalVersion=false -p:PublishSingleFile=true @revisionArguments -warnaserror -o $updaterDir
 if ($LASTEXITCODE -ne 0) {
     throw 'Updater publish failed.'
 }
@@ -117,6 +120,21 @@ Copy-Item (Join-Path $coreContentDir '*') $packageDir -Recurse -Force
 
 & (Join-Path $PSScriptRoot 'prepare-xray-core.ps1') -PackageDirectory $packageDir -ArchivePath $XrayArchive
 
+if ([string]::IsNullOrWhiteSpace($NowhereArchive)) {
+    $nowhereCache = Join-Path $artifactsRoot 'core'
+    New-Item -ItemType Directory -Path $nowhereCache -Force | Out-Null
+    $NowhereArchive = Join-Path $nowhereCache 'nowhere-3.0.0-windows-x64.zip'
+    if (!(Test-Path -LiteralPath $NowhereArchive)) {
+        Invoke-WebRequest `
+            -Uri 'https://github.com/NodePassProject/Nowhere/releases/download/v3.0.0/nowhere-x86_64-pc-windows-msvc.zip' `
+            -OutFile "$NowhereArchive.partial" -TimeoutSec 240
+        & (Join-Path $PSScriptRoot 'prepare-nowhere-core.ps1') -PackageDirectory $packageDir -ArchivePath "$NowhereArchive.partial"
+        Move-Item -LiteralPath "$NowhereArchive.partial" -Destination $NowhereArchive
+    }
+}
+& (Join-Path $PSScriptRoot 'prepare-nowhere-core.ps1') -PackageDirectory $packageDir -ArchivePath $NowhereArchive
+Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $packageDir
+
 $mihomoDirectory = Join-Path $packageDir 'bin\mihomo'
 $mihomoSource = Join-Path $mihomoDirectory 'mihomo.exe'
 $mihomoCompatibleName = Join-Path $mihomoDirectory 'mihomo-windows-amd64-v1.exe'
@@ -140,6 +158,9 @@ $requiredFiles = @(
     'bin\mihomo\mihomo-windows-amd64-v1.exe',
     'bin\geoip.dat',
     'bin\geosite.dat'
+    'bin\nowhere\nowhere.exe',
+    'bin\nowhere\LICENSE',
+    'bin\nowhere\README-freedom.md'
 )
 & (Join-Path $PSScriptRoot 'prepare-udp-components.ps1') -PackageDirectory $packageDir -CacheDirectory $UdpCacheDirectory
 $requiredFiles += @(

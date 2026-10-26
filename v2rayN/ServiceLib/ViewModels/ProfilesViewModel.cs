@@ -772,8 +772,7 @@ public class ProfilesViewModel : MyReactiveObject
             return null;
         }
 
-        var port = AppManager.Instance.GetLocalPort(EInboundProtocol.socks);
-        var proxy = new WebProxy($"socks5://{Global.Loopback}:{port}");
+        var proxy = ConnectionHandler.GetLocalWebProxy();
         var delay = await ConnectionHandler.GetRealPingTime(proxy);
         ProfileExManager.Instance.SetTestDelay(item.IndexId, delay);
         await ProfileExManager.Instance.SaveTo();

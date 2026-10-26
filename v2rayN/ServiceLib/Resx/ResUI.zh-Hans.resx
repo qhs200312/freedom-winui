@@ -1827,4 +1827,7 @@
   <data name="TbRootCertificateProviderTip" xml:space="preserve">
     <value>仅用于 freedom 界面程序的下载及网络请求，不影响核心的证书验证。</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>已允许局域网连接，但未设置完整的用户名和密码。局域网中的设备可在无认证的情况下使用此代理，请同时设置用户名和密码。</value>
+  </data>
 </root>

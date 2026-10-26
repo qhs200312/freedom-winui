@@ -10,6 +10,7 @@ public partial class CoreConfigSingboxService
             _coreConfig.experimental.clash_api = new Clash_Api4Sbox()
             {
                 external_controller = $"{Global.Loopback}:{AppManager.Instance.StatePort2}",
+                secret = ClashApiManager.Instance.ApiSecret,
             };
         }
 

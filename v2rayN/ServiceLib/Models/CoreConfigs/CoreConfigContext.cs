@@ -5,9 +5,15 @@ public record CoreConfigContext
     public required ProfileItem Node { get; init; }
     public required ECoreType RunCoreType { get; init; }
     public RoutingItem? RoutingItem { get; init; }
+    public List<RulesItem> RoutingRules =>
+    [
+        .. JsonUtils.DeepCopy(AppConfig.RoutingBasicItem?.CustomRules ?? []),
+        .. JsonUtils.Deserialize<List<RulesItem>>(RoutingItem?.RuleSet) ?? []
+    ];
     public DNSItem? RawDnsItem { get; init; }
     public SimpleDNSItem SimpleDnsItem { get; init; } = new();
     public Dictionary<string, ProfileItem> AllProxiesMap { get; init; } = new();
+    public Dictionary<string, NowhereBridge> NowhereBridges { get; init; } = new();
     public Config AppConfig { get; init; } = new();
     public FullConfigTemplateItem? FullConfigTemplate { get; init; } = new();
 

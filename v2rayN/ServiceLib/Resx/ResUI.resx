@@ -1830,4 +1830,7 @@ The "Get Certificate" action may fail if a self-signed certificate is used or if
   <data name="TbRootCertificateProviderTip" xml:space="preserve">
     <value>Only applies to the freedom GUI's downloads and network requests. Does not affect the core's certificate validation.</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>LAN access is enabled without a complete username and password. Devices on your local network can use this proxy without authentication. Set both a username and a password.</value>
+  </data>
 </root>

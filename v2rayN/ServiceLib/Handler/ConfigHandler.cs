@@ -309,6 +309,7 @@ public static class ConfigHandler
             EConfigType.WireGuard => await AddWireguardServer(config, item),
             EConfigType.Anytls => await AddAnytlsServer(config, item),
             EConfigType.Naive => await AddNaiveServer(config, item),
+            EConfigType.Nowhere => await AddNowhereServer(config, item),
             _ => -1,
         };
         return ret;
@@ -938,6 +939,13 @@ public static class ConfigHandler
     /// <param name="profileItem">Naive profile to add</param>
     /// <param name="toFile">Whether to save to file</param>
     /// <returns>0 if successful, -1 if failed</returns>
+    public static async Task<int> AddNowhereServer(Config config, ProfileItem profileItem, bool toFile = true)
+    {
+        if (NowhereFmt.Validate(profileItem) != null) return -1;
+        profileItem.StreamSecurity = Global.StreamSecurity;
+        return await AddServerCommon(config, profileItem, toFile);
+    }
+
     public static async Task<int> AddNaiveServer(Config config, ProfileItem profileItem, bool toFile = true)
     {
         profileItem.ConfigType = EConfigType.Naive;
@@ -1544,6 +1552,12 @@ public static class ConfigHandler
                 Address = Global.Loopback,
                 Port = AppManager.Instance.GetLocalPort(EInboundProtocol.socks)
             };
+            var credentials = ConnectionHandler.GetLocalProxyCredentials(config);
+            if (credentials != null)
+            {
+                itemSocks.Username = credentials.UserName;
+                itemSocks.Password = credentials.Password;
+            }
         }
         else if (node.ConfigType == EConfigType.Custom
             && node.PreSocksPort is > 0 and <= 65535)
@@ -1660,6 +1674,7 @@ public static class ConfigHandler
                 EConfigType.WireGuard => await AddWireguardServer(config, profileItem, false),
                 EConfigType.Anytls => await AddAnytlsServer(config, profileItem, false),
                 EConfigType.Naive => await AddNaiveServer(config, profileItem, false),
+                EConfigType.Nowhere => await AddNowhereServer(config, profileItem, false),
                 _ => -1,
             };
 
@@ -1857,6 +1872,7 @@ public static class ConfigHandler
                     EConfigType.WireGuard => await AddWireguardServer(config, profileItem, false),
                     EConfigType.Anytls => await AddAnytlsServer(config, profileItem, false),
                     EConfigType.Naive => await AddNaiveServer(config, profileItem, false),
+                    EConfigType.Nowhere => await AddNowhereServer(config, profileItem, false),
                     EConfigType.PolicyGroup or EConfigType.ProxyChain => await AddServerCommon(config, profileItem, false),
                     _ => -1,
                 };
@@ -1973,7 +1989,7 @@ public static class ConfigHandler
         if (lstOriSub != null)
         {
             var lstSub = await AppManager.Instance.ProfileItems(subid);
-            await RemapRoutingNodeReferencesAsync(lstOriSub, lstSub ?? []);
+            await RemapRoutingNodeReferencesAsync(config, lstOriSub, lstSub ?? []);
             foreach (var item in lstSub)
             {
                 var existItem = FindMatchedProfileItem(lstOriSub, item);
@@ -1987,7 +2003,7 @@ public static class ConfigHandler
         return counter;
     }
 
-    private static async Task RemapRoutingNodeReferencesAsync(List<ProfileItem> previous, List<ProfileItem> current)
+    private static async Task RemapRoutingNodeReferencesAsync(Config config, List<ProfileItem> previous, List<ProfileItem> current)
     {
         var replacements = new Dictionary<string, string>();
         foreach (var old in previous.Where(previousNode => previousNode.IsSub
@@ -2006,6 +2022,16 @@ public static class ConfigHandler
                     RoutingNodeSelection.Reference(matches[0].IndexId);
         }
         if (replacements.Count == 0) return;
+        var customRulesChanged = false;
+        foreach (var rule in config.RoutingBasicItem.CustomRules ?? [])
+        {
+            if (rule.OutboundTag is not null && replacements.TryGetValue(rule.OutboundTag, out var replacement))
+            {
+                rule.OutboundTag = replacement;
+                customRulesChanged = true;
+            }
+        }
+        if (customRulesChanged) await SaveConfig(config);
         foreach (var routing in await AppManager.Instance.RoutingItems() ?? [])
         {
             var rules = JsonUtils.Deserialize<List<RulesItem>>(routing.RuleSet);
@@ -2388,6 +2414,7 @@ public static class ConfigHandler
         if (item is null)
         {
             var item2 = await SQLiteHelper.Instance.TableAsync<RoutingItem>().FirstOrDefaultAsync();
+            if (item2 is null) return new RoutingItem { RuleSet = "[]" };
             await SetDefaultRouting(config, item2);
             return item2;
         }

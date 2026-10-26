@@ -25,6 +25,13 @@ public class NodeValidator
     public static NodeValidatorResult Validate(ProfileItem item, ECoreType coreType)
     {
         var v = new ValidationContext();
+        if (item.ConfigType == EConfigType.Nowhere)
+        {
+            if (NowhereFmt.Validate(item) is { } error) v.Error(error);
+            if (coreType is not (ECoreType.Xray or ECoreType.sing_box))
+                v.Error("Nowhere bridging requires Xray or sing-box.");
+            return v.ToResult();
+        }
         ValidateNodeAndCoreSupport(item, coreType, v);
         return v.ToResult();
     }

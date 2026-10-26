@@ -19,8 +19,8 @@ public sealed class SmoothTrafficChart : UserControl
         HorizontalAlignment = HorizontalAlignment.Left,
         VerticalAlignment = VerticalAlignment.Top
     };
-    private readonly ShapePath _upload = CreateLine("SuccessBrush");
-    private readonly ShapePath _download = CreateLine("WarningBrush");
+    private readonly ShapePath _upload = CreateLine("UploadChartBrush");
+    private readonly ShapePath _download = CreateLine("DownloadChartBrush");
     private readonly UISettings _uiSettings = new();
     private long[] _uploads = [];
     private long[] _downloads = [];
@@ -63,7 +63,9 @@ public sealed class SmoothTrafficChart : UserControl
 
     private static ShapePath CreateLine(string resource) => new()
     {
-        Stroke = (Brush)Application.Current.Resources[resource],
+        Stroke = (Brush)Application.Current.Resources[
+            Application.Current.Resources.ContainsKey(resource) ? resource
+                : resource == "UploadChartBrush" ? "SuccessBrush" : "WarningBrush"],
         StrokeThickness = 2,
         StrokeStartLineCap = PenLineCap.Round,
         StrokeEndLineCap = PenLineCap.Round,

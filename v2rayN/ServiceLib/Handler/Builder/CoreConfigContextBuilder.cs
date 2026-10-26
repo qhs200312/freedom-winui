@@ -58,9 +58,9 @@ public class CoreConfigContextBuilder
         }
         context = context with { Node = actNode };
         validatorResult.Warnings.AddRange(nodeValidatorResult.Warnings);
-        if (!(context.RoutingItem?.RuleSet.IsNullOrEmpty() ?? true))
+        if (context.RoutingRules.Count > 0)
         {
-            var rules = JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [];
+            var rules = context.RoutingRules;
             foreach (var ruleItem in rules.Where(ruleItem =>
                          ruleItem.Enabled && ruleItem.RuleType != ERuleType.DNS
                          && !Global.OutboundTags.Contains(ruleItem.OutboundTag)))
@@ -350,12 +350,12 @@ public class CoreConfigContextBuilder
             {
                 var fillResult = await RegisterNodeAsync(context, node);
                 fillResult.Warnings.InsertRange(0, chainValidatorResult.Warnings);
-                return (node, fillResult);
+                return (context.AllProxiesMap.GetValueOrDefault(node.IndexId, node), fillResult);
             }
         }
 
         var registerResult = await RegisterNodeAsync(context, node);
-        return (node, registerResult);
+        return (context.AllProxiesMap.GetValueOrDefault(node.IndexId, node), registerResult);
     }
 
     /// <summary>
@@ -458,7 +458,23 @@ public class CoreConfigContextBuilder
             return nodeValidatorResult;
         }
 
-        context.AllProxiesMap[node.IndexId] = node;
+        if (node.ConfigType == EConfigType.Nowhere)
+        {
+            if (context.FullConfigTemplate is { Enabled: true })
+            {
+                nodeValidatorResult.Errors.Add("Nowhere bridging does not support a full configuration template.");
+                return nodeValidatorResult;
+            }
+            if (!context.NowhereBridges.TryGetValue(node.IndexId, out var bridge))
+            {
+                bridge = NowhereBridge.Create(node, context.NowhereBridges.Values.Select(value => value.SocksNode.Port),
+                    context.AppConfig.Inbound.FirstOrDefault()?.LocalPort ?? 10808);
+                bridge.SocksNode.CoreType = context.RunCoreType;
+                context.NowhereBridges[node.IndexId] = bridge;
+            }
+            context.AllProxiesMap[node.IndexId] = bridge.SocksNode;
+        }
+        else context.AllProxiesMap[node.IndexId] = node;
 
         var address = node.Address;
         if (Utils.IsDomain(address))

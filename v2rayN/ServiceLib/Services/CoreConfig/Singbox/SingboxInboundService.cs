@@ -33,21 +33,16 @@ public partial class CoreConfigSingboxService
 
                 if (_config.Inbound.First().AllowLANConn)
                 {
+                    var lanInbound = inbound;
                     if (_config.Inbound.First().NewPort4LAN)
                     {
-                        var inbound3 = BuildInbound(inbound, EInboundProtocol.socks3, true);
-                        inbound3.listen = listen;
-                        _coreConfig.inbounds.Add(inbound3);
-
-                        //auth
-                        if (_config.Inbound.First().User.IsNotEmpty() && _config.Inbound.First().Pass.IsNotEmpty())
-                        {
-                            inbound3.users = new() { new() { username = _config.Inbound.First().User, password = _config.Inbound.First().Pass } };
-                        }
+                        lanInbound = BuildInbound(inbound, EInboundProtocol.socks3, true);
+                        _coreConfig.inbounds.Add(lanInbound);
                     }
-                    else
+                    lanInbound.listen = listen;
+                    if (_config.Inbound.First().User.IsNotEmpty() && _config.Inbound.First().Pass.IsNotEmpty())
                     {
-                        inbound.listen = listen;
+                        lanInbound.users = new() { new() { username = _config.Inbound.First().User, password = _config.Inbound.First().Pass } };
                     }
                 }
             }

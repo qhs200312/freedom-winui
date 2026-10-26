@@ -62,14 +62,14 @@ public static class RoutingNodeSelection
 
     public static string DefaultProxyReference(CoreConfigContext context)
     {
-        var defaultRule = (JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [])
+        var defaultRule = context.RoutingRules
             .FirstOrDefault(IsDefaultRule);
         return TryGetIndexId(defaultRule?.OutboundTag, out _) ? defaultRule.OutboundTag! : Global.ProxyTag;
     }
 
     public static void ValidateReferences(CoreConfigContext context)
     {
-        foreach (var rule in JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [])
+        foreach (var rule in context.RoutingRules)
         {
             if (!rule.Enabled || rule.RuleType == ERuleType.DNS
                 || !TryGetIndexId(rule.OutboundTag, out _)) continue;

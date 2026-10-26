@@ -45,6 +45,12 @@ public record ProtocolExtraItem
     public int? InsecureConcurrency { get; init; }
     public bool? NaiveQuic { get; init; }
 
+    // Nowhere Vector client settings; no database schema change is required.
+    public string? NowhereTransport { get; init; }
+    public bool? NowhereMorph { get; init; }
+    public int? NowhereUploadMbps { get; init; }
+    public int? NowhereDownloadMbps { get; init; }
+
     // group profile
     public string? GroupType { get; init; }
     public string? ChildItems { get; init; }

@@ -1770,4 +1770,7 @@ The "Get Certificate" action may fail if a self-signed certificate is used or if
   <data name="menuNewUpdate" xml:space="preserve">
     <value>New Update</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>A helyi hálózati hozzáférés engedélyezve van teljes felhasználónév és jelszó nélkül. A helyi hálózat eszközei hitelesítés nélkül használhatják ezt a proxyt. Állítson be felhasználónevet és jelszót is.</value>
+  </data>
 </root>

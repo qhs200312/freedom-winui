@@ -1794,4 +1794,7 @@ Tindakan "Ambil sertifikat" mungkin gagal jika sertifikat self-signed digunakan 
   <data name="TbEnableFinalFragmentTip" xml:space="preserve">
     <value>Memecah bagian akhir paket menjadi fragmen yang lebih kecil. Hal ini dapat memengaruhi throughput dan latensi.</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>Akses LAN diaktifkan tanpa nama pengguna dan kata sandi yang lengkap. Perangkat di jaringan lokal dapat menggunakan proksi ini tanpa autentikasi. Atur nama pengguna dan kata sandi.</value>
+  </data>
 </root>

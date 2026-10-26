@@ -26,30 +26,24 @@ public partial class CoreConfigV2rayService
 
                 if (_config.Inbound.First().AllowLANConn)
                 {
+                    var lanInbound = inbound;
                     if (_config.Inbound.First().NewPort4LAN)
                     {
-                        var inbound3 = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks3, true);
-                        inbound3.listen = listen;
-                        _coreConfig.inbounds.Add(inbound3);
-
-                        // auth
-                        if (_config.Inbound.First().User.IsNotEmpty() && _config.Inbound.First().Pass.IsNotEmpty())
-                        {
-                            inbound3.settings.auth = "password";
-                            inbound3.settings.accounts =
-                            [
-                                new()
-                                {
-                                    user = _config.Inbound.First().User,
-                                    pass = _config.Inbound.First().Pass,
-                                },
-
-                            ];
-                        }
+                        lanInbound = BuildInbound(_config.Inbound.First(), EInboundProtocol.socks3, true);
+                        _coreConfig.inbounds.Add(lanInbound);
                     }
-                    else
+                    lanInbound.listen = listen;
+                    if (_config.Inbound.First().User.IsNotEmpty() && _config.Inbound.First().Pass.IsNotEmpty())
                     {
-                        inbound.listen = listen;
+                        lanInbound.settings.auth = "password";
+                        lanInbound.settings.accounts =
+                        [
+                            new()
+                            {
+                                user = _config.Inbound.First().User,
+                                pass = _config.Inbound.First().Pass,
+                            },
+                        ];
                     }
                 }
             }

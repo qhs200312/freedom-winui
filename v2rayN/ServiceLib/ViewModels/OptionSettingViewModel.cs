@@ -488,6 +488,10 @@ public class OptionSettingViewModel : MyReactiveObject
                 NoticeManager.Instance.Enqueue(needReboot ? ResUI.NeedRebootTips : ResUI.OperationSuccess);
                 _updateView?.Invoke(EViewAction.CloseWindow, null);
             }
+            if (AllowLANConn && (User.IsNullOrEmpty() || Pass.IsNullOrEmpty()))
+            {
+                NoticeManager.Instance.SendMessageAndEnqueue(ResUI.LanAuthenticationWarning);
+            }
         }
         else
         {

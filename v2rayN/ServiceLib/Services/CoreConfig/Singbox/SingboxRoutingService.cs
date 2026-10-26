@@ -145,7 +145,7 @@ public partial class CoreConfigSingboxService
 
             if (context.IsTunEnabled)
             {
-                foreach (var applicationRule in JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [])
+                foreach (var applicationRule in context.RoutingRules)
                 {
                     if (applicationRule.Enabled && applicationRule.RuleType != ERuleType.DNS
                         && applicationRule.Process?.Count > 0)
@@ -262,7 +262,7 @@ public partial class CoreConfigSingboxService
             });
 
             var domainStrategy = _config.RoutingBasicItem.DomainStrategy4Singbox.NullIfEmpty();
-            var routing = context.RoutingItem;
+            var routing = context.RoutingItem ?? new RoutingItem();
             if (routing.DomainStrategy4Singbox.IsNotEmpty())
             {
                 domainStrategy = routing.DomainStrategy4Singbox;
@@ -280,7 +280,7 @@ public partial class CoreConfigSingboxService
             var ipRules = new List<RulesItem>();
             if (routing != null)
             {
-                var rules = JsonUtils.Deserialize<List<RulesItem>>(routing.RuleSet);
+                var rules = context.RoutingRules;
                 foreach (var item1 in rules ?? [])
                 {
                     if (!item1.Enabled)

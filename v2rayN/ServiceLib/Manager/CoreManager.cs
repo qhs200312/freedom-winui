@@ -14,13 +14,15 @@ public class CoreManager
 
     private ProcessService? _processService;
     private ProcessService? _processPreService;
+    private readonly NowhereBridgeService _nowhereBridges = new();
     private bool _linuxSudo = false;
     private Func<bool, string, Task>? _updateFunc;
     private const string _tag = "CoreHandler";
     private readonly ServiceLib.Services.Privacy.UdpInterceptionService _udpInterception = new();
     public string UdpInterceptionStatus => _udpInterception.Status;
 
-    public long WorkingSet64 => (_processService?.WorkingSet64 ?? 0) + (_processPreService?.WorkingSet64 ?? 0);
+    public long WorkingSet64 => (_processService?.WorkingSet64 ?? 0) + (_processPreService?.WorkingSet64 ?? 0)
+        + _nowhereBridges.WorkingSet64;
 
     public async Task Init(Config config, Func<bool, string, Task> updateFunc)
     {
@@ -72,6 +74,11 @@ public class CoreManager
         {
             await LoadCoreInternal(mainContext, preContext);
         }
+        catch (Exception ex) when (mainContext?.NowhereBridges.Count > 0 || preContext?.NowhereBridges.Count > 0)
+        {
+            await CoreStop();
+            await UpdateFunc(true, "Nowhere: " + ex.Message);
+        }
         finally
         {
         }
@@ -86,6 +93,7 @@ public class CoreManager
         }
 
         var node = mainContext.Node;
+        var displayNode = mainContext.NowhereBridges.GetValueOrDefault(node.IndexId)?.Node ?? node;
         var fileName = Utils.GetBinConfigPath(Global.CoreConfigFileName);
         if (mainContext.AppConfig.GuiItem.ProxyStunTraffic
             && mainContext.RunCoreType == ECoreType.Xray
@@ -124,7 +132,7 @@ public class CoreManager
             return;
         }
 
-        await UpdateFunc(false, $"{node.GetSummary()}");
+        await UpdateFunc(false, $"{displayNode.GetSummary()}");
         await UpdateFunc(false, $"{Utils.GetRuntimeInfo()}");
         await UpdateFunc(false, string.Format(ResUI.StartService, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss")));
 
@@ -133,7 +141,18 @@ public class CoreManager
             await WindowsUtils.RemoveTunDevice();
         }
 
+        var bridges = mainContext.NowhereBridges.Values.Concat(preContext?.NowhereBridges.Values.AsEnumerable() ?? [])
+            .Distinct().ToArray();
+        if (bridges.Length > 0)
+        {
+            var executable = CoreInfoManager.Instance.GetCoreExecFile(
+                CoreInfoManager.Instance.GetCoreInfo(ECoreType.nowhere), out var error);
+            if (executable.IsNullOrEmpty()) throw new FileNotFoundException(error);
+            await _nowhereBridges.StartAsync(bridges, executable, _updateFunc, AddProcessJob);
+        }
         await CoreStart(mainContext);
+        if (bridges.Length > 0 && _processService is null)
+            throw new IOException("The native core failed to start after Nowhere.");
         await WaitForProxyPort(preContext);
         await CoreStartPreService(preContext);
 
@@ -159,7 +178,7 @@ public class CoreManager
 
         if (_processService != null)
         {
-            await UpdateFunc(true, $"{node.GetSummary()}");
+            await UpdateFunc(true, $"{displayNode.GetSummary()}");
         }
     }
 
@@ -239,6 +258,7 @@ public class CoreManager
         }
         finally
         {
+            await _nowhereBridges.StopAsync();
             if (!preserveLocationProtection)
             {
             }

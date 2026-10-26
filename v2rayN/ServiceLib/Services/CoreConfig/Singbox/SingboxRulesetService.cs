@@ -60,7 +60,7 @@ public partial class CoreConfigSingboxService
         //load custom ruleset file
         List<Ruleset4Sbox> customRulesets = [];
 
-        var routing = context.RoutingItem;
+        var routing = context.RoutingItem ?? new RoutingItem();
         if (routing.CustomRulesetPath4Singbox.IsNotEmpty())
         {
             var result = EmbedUtils.LoadResource(routing.CustomRulesetPath4Singbox);

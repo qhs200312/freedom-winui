@@ -19,11 +19,11 @@ public partial class CoreConfigSingboxService
             _coreConfig.dns ??= new Dns4Sbox();
 
             // final dns
-            var routing = context.RoutingItem;
+            var routing = context.RoutingItem ?? new RoutingItem();
             var useDirectDns = false;
             if (routing != null)
             {
-                var rules = JsonUtils.Deserialize<List<RulesItem>>(routing.RuleSet) ?? [];
+                var rules = context.RoutingRules;
 
                 if (rules?.LastOrDefault() is { OutboundTag: Global.DirectTag } lastRule)
                 {
@@ -357,13 +357,7 @@ public partial class CoreConfigSingboxService
             _coreConfig.dns.rules.Add(rule4Fake);
         }
 
-        var routing = context.RoutingItem;
-        if (routing == null)
-        {
-            return;
-        }
-
-        var rules = JsonUtils.Deserialize<List<RulesItem>>(routing.RuleSet) ?? [];
+        var rules = context.RoutingRules;
         var expectedIPCidr = new List<string>();
         var expectedIPsRegions = new List<string>();
         var regionName = string.Empty;

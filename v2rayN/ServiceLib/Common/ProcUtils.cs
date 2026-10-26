@@ -11,39 +11,9 @@ public static class ProcUtils
 
     public static int? ProcessStart(string? fileName, string arguments, string? dir)
     {
-        if (fileName.IsNullOrEmpty())
-        {
-            return null;
-        }
-        try
-        {
-            if (fileName.Contains(' '))
-            {
-                fileName = fileName.AppendQuotes();
-            }
-            if (arguments.Contains(' '))
-            {
-                arguments = arguments.AppendQuotes();
-            }
-
-            Process proc = new()
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    UseShellExecute = true,
-                    FileName = fileName,
-                    Arguments = arguments,
-                    WorkingDirectory = dir ?? string.Empty
-                }
-            };
-            _ = proc.Start();
-            return dir is null ? null : proc.Id;
-        }
-        catch (Exception ex)
-        {
-            Logging.SaveLog(_tag, ex);
-        }
-        return null;
+        // Existing string callers supply one path or flag; multiple arguments use the list overload.
+        var id = ProcessStart(fileName, arguments.IsNullOrEmpty() ? [] : new[] { arguments }, dir);
+        return dir is null ? null : id;
     }
 
     public static int? ProcessStart(string? fileName, IEnumerable<string> arguments, string? dir)

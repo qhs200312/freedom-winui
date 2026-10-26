@@ -75,7 +75,7 @@ public sealed class WinUIPlatformService
                 return true;
 
             case EViewAction.ShowYesNo:
-                return await ConfirmAsync(ResUI.RemoveServer);
+                return await ConfirmAsync(value as string ?? ResUI.RemoveServer);
 
             case EViewAction.AddBatchRoutingRulesYesNo:
                 return await ConfirmAsync(ResUI.AddBatchRoutingRulesYesNo);
@@ -159,7 +159,7 @@ public sealed class WinUIPlatformService
                 return await ShowFormDialogAsync("全局热键", new GlobalHotkeySettingViewModel(HandleAsync), 920);
 
             case EViewAction.RoutingSettingWindow:
-                return await ShowCollectionDialogAsync("路由设置", new RoutingSettingViewModel(HandleAsync), "RoutingItems", "SelectedSource", 1080);
+                return await ShowDialogAsync("路由设置", new object(), CreateRoutingView(), 1080);
 
             case EViewAction.RoutingRuleSettingWindow when value is RoutingItem routing:
                 return await ShowRoutingRuleDialogAsync(routing);
@@ -294,9 +294,9 @@ public sealed class WinUIPlatformService
         return new(new SubSettingViewModel(HandleAsync), "SubItems", "SelectedSource");
     }
 
-    public DynamicCollectionView CreateRoutingView()
+    public RoutingSettingsView CreateRoutingView()
     {
-        return new(new RoutingSettingViewModel(HandleAsync), "RoutingItems", "SelectedSource");
+        return new(HandleAsync);
     }
 
     public UpdateManagerView CreateUpdateView()
@@ -355,6 +355,12 @@ public sealed class WinUIPlatformService
 
     private async Task<bool> ShowDialogAsync(string title, object viewModel, UIElement content, double width)
     {
+        if (_dialogs.TryPeek(out var parent))
+        {
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            parent.BeginInline(title, content, completion, viewModel);
+            return await completion.Task;
+        }
         var contentHost = new Border
         {
             Width = width,
@@ -380,13 +386,36 @@ public sealed class WinUIPlatformService
             }
         };
         _dialogs.Push(context);
-        await dialog.ShowAsync();
-        _dialogs.Pop();
+        try
+        {
+            await dialog.ShowAsync();
+        }
+        finally
+        {
+            while (context.CompleteInline(false)) { }
+            _dialogs.Pop();
+        }
         return context.Saved;
     }
 
     private async Task<bool> ConfirmAsync(string message)
     {
+        if (_dialogs.TryPeek(out var context))
+        {
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var panel = new StackPanel { Spacing = 20 };
+            panel.Children.Add(new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap });
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+            var confirm = new Button { Content = "确认" };
+            var cancel = new Button { Content = "取消" };
+            confirm.Click += (_, _) => context.CompleteInline(true);
+            cancel.Click += (_, _) => context.CompleteInline(false);
+            buttons.Children.Add(confirm);
+            buttons.Children.Add(cancel);
+            panel.Children.Add(buttons);
+            if (!context.BeginInline("确认操作", panel, completion)) return false;
+            return await completion.Task;
+        }
         var dialog = new ContentDialog
         {
             XamlRoot = (_window.Content as FrameworkElement)?.XamlRoot,
@@ -506,43 +535,37 @@ public sealed class WinUIPlatformService
 
     private sealed class DialogContext(ContentDialog dialog, Border contentHost, object viewModel)
     {
-        private readonly object? _rootTitle = dialog.Title;
-        private readonly string _rootCloseButtonText = dialog.CloseButtonText;
-        private readonly UIElement? _rootContent = contentHost.Child;
-        private TaskCompletionSource<bool>? _inlineCompletion;
+        private readonly Stack<(object? Title, string CloseText, UIElement? Content, object ViewModel,
+            TaskCompletionSource<bool> Completion)> _inlineViews = [];
 
         public ContentDialog Dialog { get; } = dialog;
         public Border ContentHost { get; } = contentHost;
-        public object ViewModel { get; } = viewModel;
+        public object ViewModel { get; private set; } = viewModel;
         public bool Saved { get; set; }
 
-        public bool BeginInline(string title, UIElement content, TaskCompletionSource<bool> completion)
+        public bool BeginInline(string title, UIElement content, TaskCompletionSource<bool> completion,
+            object? viewModel = null)
         {
-            if (_inlineCompletion is not null)
-            {
-                return false;
-            }
-
-            _inlineCompletion = completion;
+            _inlineViews.Push((Dialog.Title, Dialog.CloseButtonText, ContentHost.Child, ViewModel, completion));
             Dialog.Title = title;
             Dialog.CloseButtonText = "返回";
             ContentHost.Child = content;
+            if (viewModel is not null) ViewModel = viewModel;
             return true;
         }
 
         public bool CompleteInline(bool saved)
         {
-            if (_inlineCompletion is null)
+            if (!_inlineViews.TryPop(out var previous))
             {
                 return false;
             }
 
-            var completion = _inlineCompletion;
-            _inlineCompletion = null;
-            Dialog.Title = _rootTitle;
-            Dialog.CloseButtonText = _rootCloseButtonText;
-            ContentHost.Child = _rootContent;
-            completion.TrySetResult(saved);
+            Dialog.Title = previous.Title;
+            Dialog.CloseButtonText = previous.CloseText;
+            ContentHost.Child = previous.Content;
+            ViewModel = previous.ViewModel;
+            previous.Completion.TrySetResult(saved);
             return true;
         }
     }

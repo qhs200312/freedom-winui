@@ -348,7 +348,7 @@ public class DownloadService
             return null;
         }
 
-        return new WebProxy($"socks5://{Global.Loopback}:{port}");
+        return ConnectionHandler.GetLocalWebProxy();
     }
 
     internal static IWebProxy? GetSystemProxy(string destinationUrl, IWebProxy? systemProxy)
@@ -364,6 +364,13 @@ public class DownloadService
             if (systemProxy.IsBypassed(destination) || proxyUri == null || proxyUri == destination)
             {
                 return null;
+            }
+            var credentials = ConnectionHandler.GetLocalProxyCredentials(AppManager.Instance.Config);
+            if (credentials != null
+                && proxyUri.IsLoopback
+                && proxyUri.Port == AppManager.Instance.GetLocalPort(EInboundProtocol.socks))
+            {
+                return new WebProxy(proxyUri) { Credentials = credentials };
             }
             return systemProxy;
         }

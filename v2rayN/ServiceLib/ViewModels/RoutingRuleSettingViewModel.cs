@@ -4,6 +4,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
 {
     private List<RulesItem> _rules;
     private Dictionary<string, string> _nodeNames = [];
+    public bool IndependentRules { get; }
 
     public async Task LoadNodeNamesAsync()
     {
@@ -39,8 +40,10 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
 
     public ReactiveCommand<Unit, Unit> SaveCmd { get; }
 
-    public RoutingRuleSettingViewModel(RoutingItem routingItem, Func<EViewAction, object?, Task<bool>>? updateView)
+    public RoutingRuleSettingViewModel(RoutingItem routingItem, Func<EViewAction, object?, Task<bool>>? updateView,
+        bool independentRules = false)
     {
+        IndependentRules = independentRules;
         _config = AppManager.Instance.Config;
         _updateView = updateView;
 
@@ -105,13 +108,18 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
 
         SelectedSource = new();
         SelectedRouting = routingItem;
-        _rules = routingItem.Id.IsNullOrEmpty() ? [] : JsonUtils.Deserialize<List<RulesItem>>(SelectedRouting.RuleSet) ?? [];
+        _rules = IndependentRules
+            ? JsonUtils.DeepCopy(_config.RoutingBasicItem.CustomRules ?? [])
+            : routingItem.Id.IsNullOrEmpty() ? [] : JsonUtils.Deserialize<List<RulesItem>>(SelectedRouting.RuleSet) ?? [];
 
         RefreshRulesItems();
     }
 
     public void RefreshRulesItems()
     {
+        var selectedId = SelectedSource?.Id;
+        SelectedSources = [];
+        SelectedSource = null;
         RulesItems.Clear();
 
         var models = new List<RulesItemModel>();
@@ -136,6 +144,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
             models.Add(it);
         }
         RulesItems.AddRange(models);
+        SelectedSource = models.FirstOrDefault(model => model.Id == selectedId);
     }
 
     public async Task RuleEditAsync(bool blNew)
@@ -168,6 +177,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
                 _rules[_rules.FindIndex(rule => rule.Id == item.Id)] = item;
             }
             RefreshRulesItems();
+            await SaveIndependentRulesAsync();
         }
     }
 
@@ -178,6 +188,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         {
             _rules.Insert(0, rule);
             RefreshRulesItems();
+            await SaveIndependentRulesAsync();
         }
     }
 
@@ -192,6 +203,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         _rules.RemoveAll(RoutingNodeSelection.IsDefaultRule);
         _rules.Add(rule);
         RefreshRulesItems();
+        await SaveIndependentRulesAsync();
     }
 
     public async Task RuleRemoveAsync()
@@ -201,20 +213,15 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.PleaseSelectRules);
             return;
         }
-        if (await _updateView?.Invoke(EViewAction.ShowYesNo, null) == false)
+        var selectedIds = (SelectedSources?.Count > 0 ? SelectedSources : [SelectedSource])
+            .Select(item => item.Id).ToHashSet();
+        if (await _updateView?.Invoke(EViewAction.ShowYesNo, "确定删除选中的分流规则？") != true)
         {
             return;
         }
-        foreach (var it in SelectedSources ?? [SelectedSource])
-        {
-            var item = _rules.FirstOrDefault(t => t.Id == it?.Id);
-            if (item != null)
-            {
-                _rules.Remove(item);
-            }
-        }
-
+        _rules.RemoveAll(item => selectedIds.Contains(item.Id));
         RefreshRulesItems();
+        await SaveIndependentRulesAsync();
     }
 
     public async Task RuleExportSelectedAsync()
@@ -265,11 +272,33 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         if (await ConfigHandler.MoveRoutingRule(_rules, index, eMove) == 0)
         {
             RefreshRulesItems();
+            await SaveIndependentRulesAsync();
         }
+    }
+
+    private async Task SaveIndependentRulesAsync()
+    {
+        if (!IndependentRules) return;
+        var previous = _config.RoutingBasicItem.CustomRules;
+        _config.RoutingBasicItem.CustomRules = JsonUtils.DeepCopy(_rules);
+        if (await ConfigHandler.SaveConfig(_config) != 0)
+        {
+            _config.RoutingBasicItem.CustomRules = previous;
+            _rules = JsonUtils.DeepCopy(previous ?? []);
+            RefreshRulesItems();
+            NoticeManager.Instance.Enqueue(ResUI.OperationFailed);
+            return;
+        }
+        AppEvents.ReloadRequested.Publish();
     }
 
     private async Task SaveRoutingAsync()
     {
+        if (IndependentRules)
+        {
+            await SaveIndependentRulesAsync();
+            return;
+        }
         var remarks = SelectedRouting.Remarks;
         if (remarks.IsNullOrEmpty())
         {
@@ -287,7 +316,9 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         if (await ConfigHandler.SaveRoutingItem(_config, item) == 0)
         {
             NoticeManager.Instance.Enqueue(ResUI.OperationSuccess);
-            _updateView?.Invoke(EViewAction.CloseWindow, null);
+            AppEvents.RoutingsMenuRefreshRequested.Publish();
+            if (item.IsActive) AppEvents.ReloadRequested.Publish();
+            await _updateView?.Invoke(EViewAction.CloseWindow, null);
         }
         else
         {
@@ -313,6 +344,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         if (ret == 0)
         {
             RefreshRulesItems();
+            await SaveIndependentRulesAsync();
             NoticeManager.Instance.Enqueue(ResUI.OperationSuccess);
         }
     }
@@ -328,6 +360,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         if (ret == 0)
         {
             RefreshRulesItems();
+            await SaveIndependentRulesAsync();
             NoticeManager.Instance.Enqueue(ResUI.OperationSuccess);
         }
     }
@@ -347,6 +380,7 @@ public class RoutingRuleSettingViewModel : MyReactiveObject
         if (ret == 0)
         {
             RefreshRulesItems();
+            await SaveIndependentRulesAsync();
             NoticeManager.Instance.Enqueue(ResUI.OperationSuccess);
         }
     }

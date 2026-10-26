@@ -74,8 +74,11 @@ public sealed class UdpInterceptionService
                 throw new InvalidOperationException("STUN UDP 代理链路不可用，已保持普通代理模式");
 
             await WriteAtomically(Path.Combine(directory, "app-config.json"), json);
-            await WriteAtomically(Path.Combine(directory, "NLog.config"), CreateLoggingConfiguration());
-            var readiness = new UdpInterceptionReadiness(applications, socksPort);
+            var logDirectory = Path.Combine(directory, "logs");
+            Directory.CreateDirectory(logDirectory);
+            await WriteAtomically(Path.Combine(directory, "NLog.config"), CreateLoggingConfiguration(logDirectory));
+            var readiness = new UdpInterceptionReadiness(applications, socksPort,
+                Path.Combine(logDirectory, "freedom-udp.log"));
             var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _status = "启动中";
             var process = new ProcessService(executable, "run", directory, true, false, null,
@@ -91,14 +94,24 @@ public sealed class UdpInterceptionService
             _process = process;
             _job = new WindowsJobService();
             await process.StartAsync();
+            Logging.SaveLog($"UDP interception: started owned ProxiFyre process {process.Id}; waiting for {_status} at 127.0.0.1:{socksPort}.");
             if (!_job.AddProcess(process.Handle))
                 throw new InvalidOperationException("无法设置 UDP 转发进程的退出清理");
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
-            while (!ready.Task.IsCompleted)
+            try
             {
-                if (process.HasExited) throw new InvalidOperationException("转发进程启动失败，请查看 bin/proxifyre/logs");
-                await Task.Delay(100, timeout.Token);
+                while (!ready.Task.IsCompleted)
+                {
+                    if (process.HasExited) throw new InvalidOperationException("转发进程启动失败，请查看 bin/proxifyre/logs");
+                    if (await readiness.ObserveFileAsync(timeout.Token)) ready.TrySetResult();
+                    if (!ready.Task.IsCompleted) await Task.Delay(100, timeout.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException("等待 UDP 转发就绪超时；" + readiness.PendingDescription
+                    + "。诊断日志：bin/proxifyre/logs（freedom-udp.log、freedom-udp-internal.log）");
             }
             if (process.HasExited) throw new InvalidOperationException("转发进程已退出");
             _status = "运行中（实验性）";
@@ -220,11 +233,13 @@ public sealed class UdpInterceptionService
         File.Move(temporary, path, true);
     }
 
-    private static string CreateLoggingConfiguration()
+    private static string CreateLoggingConfiguration(string logDirectory)
     {
         XNamespace ns = "http://www.nlog-project.org/schemas/NLog.xsd";
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         return new XDocument(new XElement(ns + "nlog", new XAttribute(XNamespace.Xmlns + "xsi", xsi),
+            new XAttribute("internalLogLevel", "Warn"),
+            new XAttribute("internalLogFile", Path.Combine(logDirectory, "freedom-udp-internal.log")),
             new XElement(ns + "targets",
                 new XElement(ns + "target", new XAttribute("name", "console"),
                     new XAttribute(xsi + "type", "Console"), new XAttribute("layout", "${message}")),

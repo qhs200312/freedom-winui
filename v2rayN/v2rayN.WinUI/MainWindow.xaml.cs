@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window
     private bool _trayMenuInitialized;
     private readonly AppWindow _appWindow;
     private bool _updatingControls;
+    private bool _switchingOutboundMode;
     private bool _shuttingDown;
     private bool _allowClose;
     private long _currentUpload;
@@ -83,6 +84,10 @@ public sealed partial class MainWindow : Window
     private bool _initializing = true;
     private bool _syncingNavSelection;
     private long _lastTrafficSampleAt = Stopwatch.GetTimestamp();
+    private long? _coreStartedAt;
+    private long _lastMemorySampleAt;
+    private long _peakUpload;
+    private long _peakDownload;
 
     public MainWindow()
     {
@@ -147,7 +152,6 @@ public sealed partial class MainWindow : Window
         ProfilesList.ItemsSource = _profilesViewModel.ProfileItems;
         ProfileGroupCombo.ItemsSource = _profilesViewModel.SubItems;
         _profilesViewModel.SubItems.CollectionChanged += (_, _) => RefreshMoveToGroupMenu();
-        RoutingCombo.DisplayMemberPath = "DisplayRemarks";
         AppManager.Instance.ShowInTaskbar = true;
         if (Content is UIElement rootElement)
         {
@@ -156,7 +160,8 @@ public sealed partial class MainWindow : Window
 
         SubscribeToApplicationEvents();
         _trafficTimer = InitializeTrafficChart();
-        _trafficAnimation = new(this, _appWindow, MainTrafficGraph, () => DashboardPage.Visibility == Visibility.Visible);
+        _trafficAnimation = new(this, _appWindow, MainTrafficGraph, () => DashboardPage.Visibility == Visibility.Visible,
+            CoreToggleButton.SetAnimationEnabled);
         Closed += MainWindow_Closed;
         SelectNavItem("dashboard");
         NavigateToTag("dashboard");
@@ -265,13 +270,25 @@ public sealed partial class MainWindow : Window
             _lastRunningCoreType = runningCoreType;
             ResetSessionTraffic();
         }
-        CoreStatusText.Text = GetCoreStatusText();
+        CoreStatusText.Text = coreRunning ? "● 运行中" : "○ 未运行";
+        ToolTipService.SetToolTip(CoreStatusBadge, GetCoreStatusText());
+        HeaderStateGlyph.Glyph = coreRunning ? "\uE73E" : "\uE769";
+        HeaderStatusPanel.Opacity = coreRunning ? 1 : 0.55;
+        if (coreRunning && (coreTypeChanged || _coreStartedAt is null))
+        {
+            _coreStartedAt = Stopwatch.GetTimestamp();
+        }
+        else if (!coreRunning)
+        {
+            _coreStartedAt = null;
+        }
+        var uptime = _coreStartedAt is { } startedAt ? Stopwatch.GetElapsedTime(startedAt) : TimeSpan.Zero;
+        CoreUptimeText.Text = $"{(int)uptime.TotalHours:00}:{uptime:mm\\:ss}";
+        RefreshMemoryUsage();
         UdpInterceptionStatusText.Text = AppManager.Instance.Config.GuiItem.EnableUdpInterception
             ? $"UDP 接管：{CoreManager.Instance.UdpInterceptionStatus}"
             : "UDP 接管：关闭";
-        StopCoreButton.IsEnabled = coreRunning;
-        ReloadCoreButtonText.Text = coreRunning ? "重启" : "启动";
-        ToolTipService.SetToolTip(ReloadCoreButton, coreRunning ? "重载核心" : "启动核心");
+        CoreToggleButton.UpdateState(coreRunning);
         var coreStateChanged = _lastCoreRunning is null || coreRunning != _lastCoreRunning.Value;
         if (coreStateChanged)
         {
@@ -286,8 +303,8 @@ public sealed partial class MainWindow : Window
         {
             _ = RefreshOutboundIpAsync();
         }
-        UploadTotalText.Text = $"本次 {Utils.HumanFy(_sessionUpload)}";
-        DownloadTotalText.Text = $"本次 {Utils.HumanFy(_sessionDownload)}";
+        UploadTotalText.Text = $"累计 {Utils.HumanFy(_sessionUpload)}";
+        DownloadTotalText.Text = $"累计 {Utils.HumanFy(_sessionDownload)}";
         TotalTrafficText.Text = Utils.HumanFy(_sessionUpload + _sessionDownload);
         TotalTrafficDetailText.Text = $"上传 {Utils.HumanFy(_sessionUpload)} · 下载 {Utils.HumanFy(_sessionDownload)}";
         ProxyModeCombo.SelectedIndex = _statusViewModel.SystemProxySelected;
@@ -298,6 +315,7 @@ public sealed partial class MainWindow : Window
             _trayIcon.UpdateIcon(proxyMode);
         }
         TunToggle.IsOn = _statusViewModel.EnableTun;
+        TunStateText.Text = TunToggle.IsOn ? "已开启" : "未开启";
         RefreshVisibleRoutings();
         var selectedRouting = _statusViewModel.SelectedRouting;
         if (selectedRouting is null || _visibleRoutingItems.All(item => item.Id != selectedRouting.Id))
@@ -308,9 +326,23 @@ public sealed partial class MainWindow : Window
                 _statusViewModel.SelectedRouting = selectedRouting;
             }
         }
-        if (RoutingCombo.SelectedItem != selectedRouting)
+        var routeMode = OutboundModeSelection.GetMode(selectedRouting);
+        var outboundMode = runningCoreType == ECoreType.mihomo
+            ? AppManager.Instance.Config.ClashUIItem.RuleMode switch
+            {
+                ERuleMode.Global => OutboundMode.Global,
+                ERuleMode.Direct => OutboundMode.Direct,
+                ERuleMode.Rule => OutboundMode.Rules,
+                _ => routeMode
+            }
+            : routeMode;
+        RoutingRulesButton.IsChecked = outboundMode == OutboundMode.Rules;
+        RoutingGlobalButton.IsChecked = outboundMode == OutboundMode.Global;
+        RoutingDirectButton.IsChecked = outboundMode == OutboundMode.Direct;
+        if (routeMode == OutboundMode.Rules && selectedRouting is not null)
         {
-            RoutingCombo.SelectedItem = selectedRouting;
+            AppManager.Instance.Config.RoutingBasicItem.LastRuleRoutingId = selectedRouting.Id;
+            ToolTipService.SetToolTip(RoutingRulesButton, selectedRouting.DisplayRemarks);
         }
         var trayMenuSignature = CalculateTrayMenuSignature(selectedRouting?.Id, _statusViewModel.SelectedServer?.ID);
         if (!_trayMenuInitialized || trayMenuSignature != _trayMenuSignature)
@@ -369,7 +401,6 @@ public sealed partial class MainWindow : Window
 
         _routingSignature = signature;
         _visibleRoutingItems = items;
-        RoutingCombo.ItemsSource = _visibleRoutingItems;
     }
 
     private void NavList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -887,8 +918,8 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(theme);
         var accentItems = new[]
         {
+            new AccentChoice("Blue", Windows.UI.Color.FromArgb(255, 0, 127, 255)),
             new AccentChoice("Teal", Windows.UI.Color.FromArgb(255, 8, 127, 134)),
-            new AccentChoice("Blue", Windows.UI.Color.FromArgb(255, 0, 120, 212)),
             new AccentChoice("Green", Windows.UI.Color.FromArgb(255, 16, 137, 98)),
             new AccentChoice("Orange", Windows.UI.Color.FromArgb(255, 202, 80, 16)),
             new AccentChoice("Red", Windows.UI.Color.FromArgb(255, 196, 43, 28)),
@@ -946,12 +977,13 @@ public sealed partial class MainWindow : Window
         }
         var accent = config.UiItem.ColorPrimaryName switch
         {
-            "Blue" => Windows.UI.Color.FromArgb(255, 0, 120, 212),
+            "Blue" => Windows.UI.Color.FromArgb(255, 0, 127, 255),
             "Green" => Windows.UI.Color.FromArgb(255, 16, 137, 98),
             "Orange" => Windows.UI.Color.FromArgb(255, 202, 80, 16),
             "Red" => Windows.UI.Color.FromArgb(255, 196, 43, 28),
             "Purple" => Windows.UI.Color.FromArgb(255, 116, 77, 169),
-            _ => Windows.UI.Color.FromArgb(255, 8, 127, 134)
+            "Teal" => Windows.UI.Color.FromArgb(255, 8, 127, 134),
+            _ => Windows.UI.Color.FromArgb(255, 0, 127, 255)
         };
         ApplyAccentColor(accent);
     }
@@ -990,14 +1022,12 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private async void ReloadCore_Click(object sender, RoutedEventArgs e)
+    private async void CoreToggle_Click(object sender, RoutedEventArgs e)
     {
-        await RunOperationAsync(_mainViewModel.Reload);
-    }
-
-    private async void StopCore_Click(object sender, RoutedEventArgs e)
-    {
-        await RunOperationAsync(CoreManager.Instance.CoreStop);
+        await RunOperationAsync(() => CoreToggleButton.ToggleAsync(
+            () => Enum.IsDefined(AppManager.Instance.RunningCoreType),
+            _mainViewModel.Reload, CoreManager.Instance.CoreStop));
+        RefreshDashboard();
     }
 
     private void ProxyModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1008,6 +1038,31 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void DashboardNavigate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string tag })
+        {
+            SelectNavItem(tag);
+            NavigateToTag(tag);
+        }
+    }
+
+    private void RefreshMemoryUsage()
+    {
+        if (_lastMemorySampleAt != 0 && Stopwatch.GetElapsedTime(_lastMemorySampleAt).TotalSeconds < 3)
+        {
+            return;
+        }
+        _lastMemorySampleAt = Stopwatch.GetTimestamp();
+        using var process = Process.GetCurrentProcess();
+        var workingSet = process.WorkingSet64;
+        var managed = Math.Min(workingSet, GC.GetTotalMemory(false));
+        AppMemoryText.Text = (workingSet / 1048576d).ToString("F1", CultureInfo.CurrentCulture);
+        MemoryDetailText.Text = $"托管 {(managed / 1048576d):F1} MB · 应用工作集";
+        ManagedMemoryColumn.Width = new GridLength(Math.Max(1, managed), GridUnitType.Star);
+        OtherMemoryColumn.Width = new GridLength(Math.Max(1, workingSet - managed), GridUnitType.Star);
+    }
+
     private void TunToggle_Toggled(object sender, RoutedEventArgs e)
     {
         if (!_updatingControls)
@@ -1016,11 +1071,56 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void RoutingCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void OutboundMode_Checked(object sender, RoutedEventArgs e)
     {
-        if (!_updatingControls && RoutingCombo.SelectedItem is ServiceLib.Models.Entities.RoutingItem routing)
+        if (_initializing || _updatingControls || _switchingOutboundMode
+            || sender is not RadioButton { Tag: string tag } || !Enum.TryParse<OutboundMode>(tag, out var mode))
         {
-            _statusViewModel.SelectedRouting = routing;
+            return;
+        }
+        _switchingOutboundMode = true;
+        RoutingRulesButton.IsEnabled = RoutingGlobalButton.IsEnabled = RoutingDirectButton.IsEnabled = false;
+        try
+        {
+            await RunOperationAsync(async () =>
+            {
+                var config = AppManager.Instance.Config;
+                var current = _statusViewModel.SelectedRouting;
+                if (current is not null && OutboundModeSelection.GetMode(current) == OutboundMode.Rules)
+                {
+                    config.RoutingBasicItem.LastRuleRoutingId = current.Id;
+                }
+                var routings = await AppManager.Instance.RoutingItems() ?? [];
+                var routing = OutboundModeSelection.FindRouting(routings, mode, config.RoutingBasicItem.LastRuleRoutingId);
+                if (routing is null)
+                {
+                    routing = OutboundModeSelection.CreateRouting(mode, routings.Select(item => item.Sort).DefaultIfEmpty().Max() + 1);
+                    if (await ConfigHandler.SaveRoutingItem(config, routing) != 0)
+                    {
+                        throw new InvalidOperationException("无法保存出站模式，请重试");
+                    }
+                    _statusViewModel.RoutingItems.Add(routing);
+                }
+                var previousClashMode = config.ClashUIItem.RuleMode;
+                config.ClashUIItem.RuleMode = mode switch
+                {
+                    OutboundMode.Global => ERuleMode.Global,
+                    OutboundMode.Direct => ERuleMode.Direct,
+                    _ => ERuleMode.Rule
+                };
+                await ConfigHandler.SaveConfig(config);
+                _statusViewModel.SelectedRouting = routing;
+                if (current?.Id == routing.Id && previousClashMode != config.ClashUIItem.RuleMode)
+                {
+                    AppEvents.ReloadRequested.Publish();
+                }
+            });
+        }
+        finally
+        {
+            _switchingOutboundMode = false;
+            RoutingRulesButton.IsEnabled = RoutingGlobalButton.IsEnabled = RoutingDirectButton.IsEnabled = true;
+            RefreshDashboard();
         }
     }
 
@@ -1411,6 +1511,7 @@ public sealed partial class MainWindow : Window
             "wireguard" => _mainViewModel.AddWireguardServerCmd,
             "anytls" => _mainViewModel.AddAnytlsServerCmd,
             "naive" => _mainViewModel.AddNaiveServerCmd,
+            "nowhere" => _mainViewModel.AddNowhereServerCmd,
             "custom" => _mainViewModel.AddCustomServerCmd,
             "policy" => _mainViewModel.AddPolicyGroupServerCmd,
             "chain" => _mainViewModel.AddProxyChainServerCmd,
@@ -1472,16 +1573,25 @@ public sealed partial class MainWindow : Window
         _currentDownload = speed.ProxyDown;
         _sessionUpload += Math.Max(0, speed.ProxyUp);
         _sessionDownload += Math.Max(0, speed.ProxyDown);
-        UploadSpeedText.Text = $"{Utils.HumanFy(speed.ProxyUp)}/s";
-        DownloadSpeedText.Text = $"{Utils.HumanFy(speed.ProxyDown)}/s";
+        SetTrafficSpeed(UploadSpeedValueText, UploadSpeedUnitText, speed.ProxyUp);
+        SetTrafficSpeed(DownloadSpeedValueText, DownloadSpeedUnitText, speed.ProxyDown);
+        _peakUpload = Math.Max(_peakUpload, speed.ProxyUp);
+        _peakDownload = Math.Max(_peakDownload, speed.ProxyDown);
+        UploadPeakText.Text = $"峰值 {Utils.HumanFy(_peakUpload)}/s";
+        DownloadPeakText.Text = $"峰值 {Utils.HumanFy(_peakDownload)}/s";
     }
 
     private void ResetSessionTraffic()
     {
+        _coreStartedAt = null;
         _currentUpload = 0;
         _currentDownload = 0;
         _sessionUpload = 0;
         _sessionDownload = 0;
+        _peakUpload = 0;
+        _peakDownload = 0;
+        UploadPeakText.Text = "峰值 0 B/s";
+        DownloadPeakText.Text = "峰值 0 B/s";
         _uploadHistory.Clear();
         _downloadHistory.Clear();
         for (var index = 0; index < TrafficHistoryCapacity; index++)
@@ -1490,9 +1600,17 @@ public sealed partial class MainWindow : Window
             _downloadHistory.Enqueue(0);
         }
         _lastTrafficSampleAt = Stopwatch.GetTimestamp();
-        UploadSpeedText.Text = "0 B/s";
-        DownloadSpeedText.Text = "0 B/s";
+        SetTrafficSpeed(UploadSpeedValueText, UploadSpeedUnitText, 0);
+        SetTrafficSpeed(DownloadSpeedValueText, DownloadSpeedUnitText, 0);
         RenderTrafficChart();
+    }
+
+    private static void SetTrafficSpeed(Microsoft.UI.Xaml.Documents.Run value, Microsoft.UI.Xaml.Documents.Run unit, long speed)
+    {
+        var formatted = Utils.HumanFy(speed);
+        var separator = formatted.LastIndexOf(' ');
+        value.Text = formatted[..separator];
+        unit.Text = $" {formatted[(separator + 1)..]}/s";
     }
 
     private void TrafficCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -1503,24 +1621,35 @@ public sealed partial class MainWindow : Window
     private void DashboardPage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         DashboardContentGrid.Width = Math.Max(0, Math.Min(1600, e.NewSize.Width - 2));
-        ApplyDashboardGridLayout(e.NewSize.Width < 1120);
+        ApplyDashboardGridLayout(e.NewSize.Width < 960);
     }
 
     private void ApplyDashboardGridLayout(bool compact)
     {
+        MetricGrid.RowSpacing = ControlGrid.RowSpacing = DetailGrid.RowSpacing = BottomGrid.RowSpacing = compact ? 14 : 0;
         MetricColumn3.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         MetricColumn4.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         ControlColumn3.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         ControlColumn4.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
 
-        Grid.SetRow(TotalTrafficCard, compact ? 1 : 0);
-        Grid.SetColumn(TotalTrafficCard, compact ? 0 : 2);
-        Grid.SetRow(ActiveServerCard, compact ? 1 : 0);
-        Grid.SetColumn(ActiveServerCard, compact ? 1 : 3);
-        Grid.SetRow(RoutingCard, compact ? 1 : 0);
-        Grid.SetColumn(RoutingCard, compact ? 0 : 2);
-        Grid.SetRow(OutboundIpCard, compact ? 1 : 0);
-        Grid.SetColumn(OutboundIpCard, compact ? 1 : 3);
+        DetailColumn3.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        DetailColumn4.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        BottomColumn2.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+
+        Grid.SetRow(UploadCard, compact ? 1 : 0);
+        Grid.SetColumn(UploadCard, compact ? 0 : 2);
+        Grid.SetRow(DownloadCard, compact ? 1 : 0);
+        Grid.SetColumn(DownloadCard, compact ? 1 : 3);
+        Grid.SetRow(SystemProxyCard, compact ? 1 : 0);
+        Grid.SetColumn(SystemProxyCard, compact ? 0 : 2);
+        Grid.SetRow(TunCard, compact ? 1 : 0);
+        Grid.SetColumn(TunCard, compact ? 1 : 3);
+        Grid.SetRow(NetworkStatusCard, compact ? 1 : 0);
+        Grid.SetColumn(NetworkStatusCard, compact ? 0 : 2);
+        Grid.SetRow(MemoryCard, compact ? 1 : 0);
+        Grid.SetColumn(MemoryCard, compact ? 1 : 3);
+        Grid.SetRow(QuickAccessCard, compact ? 1 : 0);
+        Grid.SetColumn(QuickAccessCard, compact ? 0 : 1);
     }
 
     private void RenderTrafficChart()
@@ -1533,6 +1662,8 @@ public sealed partial class MainWindow : Window
         var maximum = Math.Max(1, Math.Max(uploads.Max(), downloads.Max()));
         var niceMaximum = NiceCeiling(maximum);
         MainTrafficGraph.UpdateSeries(uploads, downloads, niceMaximum, sampleAge);
+        UploadSparkline.Points = BuildSparkline(uploads, UploadSparklineHost.ActualWidth, UploadSparklineHost.ActualHeight);
+        DownloadSparkline.Points = BuildSparkline(downloads, DownloadSparklineHost.ActualWidth, DownloadSparklineHost.ActualHeight);
 
         var width = TrafficCanvas.ActualWidth;
         var height = TrafficCanvas.ActualHeight;
@@ -1559,6 +1690,19 @@ public sealed partial class MainWindow : Window
         XAxisMidLabel.Text = "-30s";
         XAxisRightLabel.Text = "现在";
 
+    }
+
+    private static PointCollection BuildSparkline(long[] values, double width, double height)
+    {
+        var points = new PointCollection();
+        if (values.Length < 2 || width <= 0 || height <= 4) return points;
+        var maximum = Math.Max(1, values.Max());
+        for (var index = 0; index < values.Length; index++)
+        {
+            points.Add(new Point(index * width / (values.Length - 1),
+                height - 2 - (height - 4) * Math.Max(0, values[index]) / maximum));
+        }
+        return points;
     }
 
     private static long NiceCeiling(long value)

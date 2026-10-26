@@ -170,6 +170,8 @@ public class SpeedTestItem
 [Serializable]
 public class RoutingBasicItem
 {
+    public List<RulesItem> CustomRules { get; set; } = [];
+    public string LastRuleRoutingId { get; set; } = string.Empty;
     public string DomainStrategy { get; set; }
     public string DomainStrategy4Singbox { get; set; }
     public string RoutingIndexId { get; set; }

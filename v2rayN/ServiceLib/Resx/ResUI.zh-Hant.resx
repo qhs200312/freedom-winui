@@ -1806,4 +1806,7 @@
   <data name="InvalidHttpOutboundHeaders" xml:space="preserve">
     <value>請填寫合法的HTTP請求頭JSON。</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>已允許區域網路連線，但尚未設定完整的使用者名稱和密碼。區域網路中的裝置可在未驗證的情況下使用此代理，請同時設定使用者名稱和密碼。</value>
+  </data>
 </root>

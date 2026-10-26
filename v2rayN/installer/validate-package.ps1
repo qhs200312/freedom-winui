@@ -33,6 +33,7 @@ $required = @(
     'App.xbf', 'MainWindow.xbf', 'Views\UpdateManagerView.xbf', 'Assets\freedom.ico',
     'bin\xray\xray.exe', 'bin\xray\wintun.dll', 'bin\sing_box\sing-box.exe',
     'bin\mihomo\mihomo-windows-amd64-v1.exe', 'bin\geoip.dat', 'bin\geosite.dat',
+    'bin\nowhere\nowhere.exe', 'bin\nowhere\LICENSE', 'bin\nowhere\README-freedom.md',
     'bin\proxifyre\ProxiFyre.exe', 'bin\proxifyre\.freedom-managed',
     'prerequisites\Windows.Packet.Filter.3.6.2.1.x64.msi', 'prerequisites\VC_redist.x64.exe'
 )
@@ -46,4 +47,4 @@ $manifest = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes((Join-Path $
 if ($manifest -notmatch '<requestedExecutionLevel\s+level="requireAdministrator"') {
     throw 'The application does not contain its administrator manifest.'
 }
-Write-Output "Validated self-contained .NET/Desktop runtimes, WinUI resources, cores and UDP prerequisites: $package"
+Write-Output "Validated self-contained .NET/Desktop runtimes, WinUI resources, cores including Nowhere, and UDP prerequisites: $package"

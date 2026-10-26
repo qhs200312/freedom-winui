@@ -1770,4 +1770,7 @@
   <data name="menuNewUpdate" xml:space="preserve">
     <value>Доступно обновление</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>Доступ из локальной сети включён без полного имени пользователя и пароля. Устройства в локальной сети могут использовать этот прокси без аутентификации. Укажите имя пользователя и пароль.</value>
+  </data>
 </root>

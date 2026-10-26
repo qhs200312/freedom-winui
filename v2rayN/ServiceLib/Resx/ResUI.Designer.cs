@@ -5192,5 +5192,11 @@ namespace ServiceLib.Resx {
                 return ResourceManager.GetString("UpgradeAppNotExistTip", resourceCulture);
             }
         }
+        public static string LanAuthenticationWarning {
+            get {
+                return ResourceManager.GetString("LanAuthenticationWarning", resourceCulture);
+            }
+        }
+
     }
 }

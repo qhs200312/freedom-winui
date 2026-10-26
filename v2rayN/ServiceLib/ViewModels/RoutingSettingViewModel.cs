@@ -150,21 +150,27 @@ public class RoutingSettingViewModel : MyReactiveObject
             NoticeManager.Instance.Enqueue(ResUI.PleaseSelectRules);
             return;
         }
-        if (await _updateView?.Invoke(EViewAction.ShowYesNo, null) == false)
+        var selectedIds = (SelectedSources?.Count > 0 ? SelectedSources : [SelectedSource])
+            .Select(item => item.Id).Distinct().ToList();
+        if (await _updateView?.Invoke(EViewAction.ShowYesNo, "确定删除选中的路由方案？") != true)
         {
             return;
         }
-        foreach (var it in SelectedSources ?? [SelectedSource])
+        foreach (var id in selectedIds)
         {
-            var item = await AppManager.Instance.GetRoutingItem(it?.Id);
+            var item = await AppManager.Instance.GetRoutingItem(id);
             if (item != null)
             {
                 await ConfigHandler.RemoveRoutingItem(item);
             }
         }
 
+        await ConfigHandler.InitBuiltinRouting(_config);
+        await ConfigHandler.GetDefaultRouting(_config);
         await RefreshRoutingItems();
         IsModified = true;
+        AppEvents.RoutingsMenuRefreshRequested.Publish();
+        AppEvents.ReloadRequested.Publish();
     }
 
     public async Task RoutingAdvancedSetDefault()
@@ -180,6 +186,8 @@ public class RoutingSettingViewModel : MyReactiveObject
         {
             await RefreshRoutingItems();
             IsModified = true;
+            AppEvents.RoutingsMenuRefreshRequested.Publish();
+            AppEvents.ReloadRequested.Publish();
         }
     }
 
@@ -189,6 +197,8 @@ public class RoutingSettingViewModel : MyReactiveObject
         {
             await RefreshRoutingItems();
             IsModified = true;
+            AppEvents.RoutingsMenuRefreshRequested.Publish();
+            AppEvents.ReloadRequested.Publish();
         }
     }
 }

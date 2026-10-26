@@ -18,7 +18,7 @@ public static class UdpInterceptionConfig
     [
         "freedom.exe", "v2rayN.exe", "AmazTool.exe", "ProxiFyre.exe",
         "ProxiFyreUI.exe", "sing-box.exe", "xray.exe", "mihomo.exe",
-        "clash.exe", "v2ray.exe", "hysteria.exe", "tuic.exe", "naive.exe"
+        "clash.exe", "v2ray.exe", "hysteria.exe", "tuic.exe", "naive.exe", "nowhere.exe"
     ];
 
     public static List<string> ParseApplications(string? value)

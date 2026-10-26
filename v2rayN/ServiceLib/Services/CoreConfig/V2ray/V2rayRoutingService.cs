@@ -48,7 +48,7 @@ public partial class CoreConfigV2rayService
             if (_coreConfig.routing?.rules != null)
             {
                 _coreConfig.routing.domainStrategy = _config.RoutingBasicItem.DomainStrategy;
-                var applicationRules = (JsonUtils.Deserialize<List<RulesItem>>(context.RoutingItem?.RuleSet) ?? [])
+                var applicationRules = context.RoutingRules
                     .Where(rule => context.IsTunEnabled && rule.Enabled
                         && rule.RuleType != ERuleType.DNS && rule.Process?.Count > 0).ToList();
                 foreach (var applicationRule in applicationRules)
@@ -80,14 +80,14 @@ public partial class CoreConfigV2rayService
                     });
                 }
 
-                var routing = context.RoutingItem;
+                var routing = context.RoutingItem ?? new RoutingItem();
                 if (routing != null)
                 {
                     if (routing.DomainStrategy.IsNotEmpty())
                     {
                         _coreConfig.routing.domainStrategy = routing.DomainStrategy;
                     }
-                    var rules = JsonUtils.Deserialize<List<RulesItem>>(routing.RuleSet);
+                    var rules = context.RoutingRules;
                     foreach (var item in rules)
                     {
                         if (!item.Enabled)

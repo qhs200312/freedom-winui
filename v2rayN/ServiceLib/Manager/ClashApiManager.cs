@@ -1,3 +1,5 @@
+using System.Net.Http;
+using System.Net.Http.Headers;
 using static ServiceLib.Models.Dto.ClashProxies;
 
 namespace ServiceLib.Manager;
@@ -8,6 +10,16 @@ public sealed class ClashApiManager
     public static ClashApiManager Instance => instance.Value;
 
     private static readonly string _tag = "ClashApiHandler";
+    private static readonly HttpClient _httpClient = new(new SocketsHttpHandler
+    {
+        UseProxy = false,
+        UseCookies = false,
+        AllowAutoRedirect = false,
+    });
+
+    [JsonIgnore]
+    public string ApiSecret { get; } = Utils.GetGuid();
+
     private Dictionary<string, ProxiesItem>? _proxies;
     public Dictionary<string, object> ProfileContent { get; set; }
 
@@ -16,11 +28,11 @@ public sealed class ClashApiManager
         for (var i = 0; i < 3; i++)
         {
             var url = $"{GetApiUrl()}/proxies";
-            var result = await HttpClientHelper.Instance.TryGetAsync(url);
+            var result = await TryGetAsync(url);
             var clashProxies = JsonUtils.Deserialize<ClashProxies>(result);
 
             var url2 = $"{GetApiUrl()}/providers/proxies";
-            var result2 = await HttpClientHelper.Instance.TryGetAsync(url2);
+            var result2 = await TryGetAsync(url2);
             var clashProviders = JsonUtils.Deserialize<ClashProviders>(result2);
 
             if (clashProxies != null || clashProviders != null)
@@ -73,7 +85,7 @@ public sealed class ClashApiManager
                 var url = string.Format(urlBase, name);
                 tasks.Add(Task.Run(async () =>
                 {
-                    var result = await HttpClientHelper.Instance.TryGetAsync(url);
+                    var result = await TryGetAsync(url);
                     await updateFunc?.Invoke(it, result);
                 }));
             }
@@ -108,7 +120,7 @@ public sealed class ClashApiManager
             var url = $"{GetApiUrl()}/proxies/{name}";
             var headers = new Dictionary<string, string>();
             headers.Add("name", nameNode);
-            await HttpClientHelper.Instance.PutAsync(url, headers);
+            await SendAsync(HttpMethod.Put, url, headers);
         }
         catch (Exception ex)
         {
@@ -125,7 +137,7 @@ public sealed class ClashApiManager
 
         var urlBase = $"{GetApiUrl()}/configs";
 
-        await HttpClientHelper.Instance.PatchAsync(urlBase, headers);
+        await SendAsync(HttpMethod.Patch, urlBase, headers);
     }
 
     public async Task ClashConfigReload(string filePath)
@@ -136,7 +148,7 @@ public sealed class ClashApiManager
             var url = $"{GetApiUrl()}/configs?force=true";
             var headers = new Dictionary<string, string>();
             headers.Add("path", filePath);
-            await HttpClientHelper.Instance.PutAsync(url, headers);
+            await SendAsync(HttpMethod.Put, url, headers);
         }
         catch (Exception ex)
         {
@@ -149,7 +161,7 @@ public sealed class ClashApiManager
         try
         {
             var url = $"{GetApiUrl()}/connections";
-            var result = await HttpClientHelper.Instance.TryGetAsync(url);
+            var result = await TryGetAsync(url);
             var clashConnections = JsonUtils.Deserialize<ClashConnections>(result);
 
             return clashConnections;
@@ -167,12 +179,38 @@ public sealed class ClashApiManager
         try
         {
             var url = $"{GetApiUrl()}/connections/{id}";
-            await HttpClientHelper.Instance.DeleteAsync(url);
+            await SendAsync(HttpMethod.Delete, url);
         }
         catch (Exception ex)
         {
             Logging.SaveLog(_tag, ex);
         }
+    }
+
+    private async Task<string?> TryGetAsync(string url)
+    {
+        try
+        {
+            return await SendAsync(HttpMethod.Get, url);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<string> SendAsync(HttpMethod method, string url, Dictionary<string, string>? body = null)
+    {
+        using var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", ApiSecret);
+        if (body != null)
+        {
+            request.Content = new StringContent(JsonUtils.Serialize(body), Encoding.UTF8, "application/json");
+        }
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
     }
 
     private string GetApiUrl()

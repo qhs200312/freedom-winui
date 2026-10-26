@@ -1770,4 +1770,7 @@ The "Get Certificate" action may fail if a self-signed certificate is used or if
   <data name="menuNewUpdate" xml:space="preserve">
     <value>New Update</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>دسترسی شبکهٔ محلی بدون نام کاربری و گذرواژهٔ کامل فعال است. دستگاه‌های شبکهٔ محلی می‌توانند بدون احراز هویت از این پروکسی استفاده کنند. نام کاربری و گذرواژه را تنظیم کنید.</value>
+  </data>
 </root>

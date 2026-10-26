@@ -1767,4 +1767,7 @@ The "Get Certificate" action may fail if a self-signed certificate is used or if
   <data name="menuNewUpdate" xml:space="preserve">
     <value>Nouvelle MAJ</value>
   </data>
+  <data name="LanAuthenticationWarning" xml:space="preserve">
+    <value>L’accès au réseau local est activé sans nom d’utilisateur et mot de passe complets. Les appareils du réseau local peuvent utiliser ce proxy sans authentification. Définissez un nom d’utilisateur et un mot de passe.</value>
+  </data>
 </root>

@@ -19,7 +19,7 @@ internal static class NetworkDiagnosticsRoute
         {
             UseProxy = running,
             AllowAutoRedirect = false,
-            Proxy = running ? new WebProxy($"socks5://127.0.0.1:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}") : null,
+            Proxy = running ? ServiceLib.Handler.ConnectionHandler.GetLocalWebProxy() : null,
             ConnectTimeout = TimeSpan.FromSeconds(5),
             AutomaticDecompression = DecompressionMethods.All
         };

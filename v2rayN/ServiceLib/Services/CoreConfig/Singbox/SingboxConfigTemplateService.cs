@@ -56,6 +56,12 @@ public partial class CoreConfigSingboxService
             fullConfigTemplateNode["endpoints"] = customEndpointsNode;
         }
 
+        if (fullConfigTemplateNode["experimental"]?["clash_api"] is JsonObject clashApi
+            && clashApi["external_controller"]?.GetValue<string>() == $"{Global.Loopback}:{AppManager.Instance.StatePort2}")
+        {
+            clashApi["secret"] = ClashApiManager.Instance.ApiSecret;
+        }
+
         return JsonUtils.Serialize(fullConfigTemplateNode);
     }
 

@@ -293,6 +293,7 @@ public class V2ray_Api4Sbox
 public class Clash_Api4Sbox
 {
     public string? external_controller { get; set; }
+    public string? secret { get; set; }
     public bool? store_selected { get; set; }
 }
 

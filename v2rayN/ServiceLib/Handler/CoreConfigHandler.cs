@@ -38,6 +38,12 @@ public static class CoreConfigHandler
             await File.WriteAllTextAsync(fileName, result.Data.ToString());
         }
 
+        var inbound = config.Inbound.First();
+        if (inbound.AllowLANConn && (inbound.User.IsNullOrEmpty() || inbound.Pass.IsNullOrEmpty()))
+        {
+            NoticeManager.Instance.SendMessageAndEnqueue(ResUI.LanAuthenticationWarning);
+        }
+
         return result;
     }
 
@@ -109,6 +115,8 @@ public static class CoreConfigHandler
             }
             context.ServerTestItemMap[node.IndexId] = actNode.IndexId;
         }
+        if (context.NowhereBridges.Count > 0)
+            return new RetResult { Msg = "Nowhere experimental nodes do not support background speed tests yet." };
         if (coreType == ECoreType.sing_box)
         {
             result = new CoreConfigSingboxService(context).GenerateClientSpeedtestConfig(selecteds);
@@ -128,6 +136,8 @@ public static class CoreConfigHandler
     public static async Task<RetResult> GenerateClientSpeedtestConfig(Config config, CoreConfigContext context, ServerTestItem testItem, string fileName)
     {
         var result = new RetResult();
+        if (context.NowhereBridges.Count > 0)
+            return new RetResult { Msg = "Nowhere experimental nodes do not support background speed tests yet." };
         var initPort = AppManager.Instance.GetLocalPort(EInboundProtocol.speedtest);
         var port = Utils.GetFreePort(initPort + testItem.QueueNum);
         testItem.Port = port;

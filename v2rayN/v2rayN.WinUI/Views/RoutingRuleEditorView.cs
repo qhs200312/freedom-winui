@@ -22,7 +22,10 @@ public sealed class RoutingRuleEditorView : UserControl
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        root.Children.Add(BuildRoutingInfo());
+        if (!viewModel.IndependentRules)
+        {
+            root.Children.Add(BuildRoutingInfo());
+        }
 
         var commandBar = BuildCommandBar();
         Grid.SetRow(commandBar, 1);
@@ -88,13 +91,19 @@ public sealed class RoutingRuleEditorView : UserControl
         bar.PrimaryCommands.Add(Command("添加域名", Symbol.Add, _viewModel.WebsiteAddCmd));
         bar.PrimaryCommands.Add(Command("编辑", Symbol.Edit, _viewModel.RuleEditCmd));
         bar.PrimaryCommands.Add(Command("删除", Symbol.Delete, _viewModel.RuleRemoveCmd));
-        bar.PrimaryCommands.Add(Command("默认节点", Symbol.Forward, _viewModel.DefaultNodeCmd));
-        bar.PrimaryCommands.Add(Command("保存规则集", Symbol.Save, _viewModel.SaveCmd));
+        if (!_viewModel.IndependentRules)
+        {
+            bar.PrimaryCommands.Add(Command("默认节点", Symbol.Forward, _viewModel.DefaultNodeCmd));
+            bar.PrimaryCommands.Add(Command("保存规则集", Symbol.Save, _viewModel.SaveCmd));
+        }
         bar.SecondaryCommands.Add(Command("应用分流", Symbol.AllApps, _viewModel.ApplicationAddCmd));
         bar.SecondaryCommands.Add(Command("新增高级规则", Symbol.Add, _viewModel.RuleAddCmd));
         bar.SecondaryCommands.Add(Command("从文件导入", Symbol.Download, _viewModel.ImportRulesFromFileCmd));
         bar.SecondaryCommands.Add(Command("从剪贴板导入", Symbol.Paste, _viewModel.ImportRulesFromClipboardCmd));
-        bar.SecondaryCommands.Add(Command("从订阅地址导入", Symbol.World, _viewModel.ImportRulesFromUrlCmd));
+        if (!_viewModel.IndependentRules)
+        {
+            bar.SecondaryCommands.Add(Command("从订阅地址导入", Symbol.World, _viewModel.ImportRulesFromUrlCmd));
+        }
         bar.SecondaryCommands.Add(Command("导出选中", Symbol.Share, _viewModel.RuleExportSelectedCmd));
         bar.SecondaryCommands.Add(Command("移到顶部", Symbol.Up, _viewModel.MoveTopCmd));
         bar.SecondaryCommands.Add(Command("上移", Symbol.Up, _viewModel.MoveUpCmd));

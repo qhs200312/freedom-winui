@@ -189,7 +189,8 @@ public sealed class DynamicFormView : UserControl
                 continue;
             }
 
-            if (source is AddServerViewModel server && property.Name is nameof(AddServerViewModel.Cert) or nameof(AddServerViewModel.CertTip) or nameof(AddServerViewModel.CertSha))
+            if (source is AddServerViewModel server && server.SelectedSource.ConfigType != EConfigType.Nowhere
+                && property.Name is nameof(AddServerViewModel.Cert) or nameof(AddServerViewModel.CertTip) or nameof(AddServerViewModel.CertSha))
             {
                 if (property.Name == nameof(AddServerViewModel.Cert)
                     && server.SelectedSource.StreamSecurity == Global.StreamSecurity)
@@ -537,6 +538,31 @@ public sealed class DynamicFormView : UserControl
         {
             editor = choiceEditor;
         }
+        else if (source is AddServerViewModel && property.Name is
+                 nameof(AddServerViewModel.NowhereUploadMbps) or nameof(AddServerViewModel.NowhereDownloadMbps))
+        {
+            var number = new NumberBox
+            {
+                Header = label,
+                Minimum = 0,
+                Maximum = int.MaxValue,
+                SmallChange = 1,
+                SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+                Value = property.GetValue(source) is int value ? value : double.NaN
+            };
+            number.ValueChanged += (_, args) =>
+            {
+                if (double.IsNaN(args.NewValue))
+                {
+                    property.SetValue(source, null);
+                }
+                else
+                {
+                    property.SetValue(source, (int)Math.Clamp(Math.Round(args.NewValue), 0, int.MaxValue));
+                }
+            };
+            editor = number;
+        }
         else if (propertyType == typeof(bool) && nullable)
         {
             var checkBox = new CheckBox { Content = label, MinHeight = 40, VerticalAlignment = VerticalAlignment.Center };
@@ -628,6 +654,17 @@ public sealed class DynamicFormView : UserControl
 
     private static FrameworkElement? BuildChoiceField(object source, PropertyInfo property, Binding binding, string label)
     {
+        if (source is AddServerViewModel && property.Name == nameof(AddServerViewModel.NowhereTransport))
+        {
+            var transport = new ComboBox
+            {
+                Header = label,
+                ItemsSource = new[] { "tcp", "udp", "tcp4", "tcp6", "udp4", "udp6" },
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            transport.SetBinding(ComboBox.SelectedItemProperty, binding);
+            return transport;
+        }
         if (source is not OptionSettingViewModel)
         {
             return null;
@@ -844,6 +881,10 @@ public sealed class DynamicFormView : UserControl
     private static bool ShouldIncludeServerEditorProperty(AddServerViewModel server, string name)
     {
         var type = server.SelectedSource.ConfigType;
+        if (type == EConfigType.Nowhere)
+            return name is "SelectedSource" or "CoreType" or "CertSha" or "NowhereTransport"
+                or "NowhereMorph" or "NowhereUploadMbps" or "NowhereDownloadMbps";
+        if (name.StartsWith("Nowhere", StringComparison.Ordinal)) return false;
         if (name is "SelectedSource" or "CoreType")
         {
             return true;
@@ -878,6 +919,8 @@ public sealed class DynamicFormView : UserControl
 
     private static bool ShouldIncludeProfileProperty(ProfileItem profile, string name)
     {
+        if (profile.ConfigType == EConfigType.Nowhere)
+            return name is "Remarks" or "Address" or "Port" or "Password" or "Sni";
         if (name is "Remarks" or "Address" or "Port" or "Password" or "DisplayLog")
         {
             return true;
@@ -996,6 +1039,8 @@ public sealed class DynamicFormView : UserControl
         ["Id"] = "用户 ID", ["Password"] = "密码", ["Security"] = "加密方式", ["Network"] = "传输协议",
         ["StreamSecurity"] = "传输层安全", ["Sni"] = "服务器名称 SNI", ["Alpn"] = "ALPN", ["Fingerprint"] = "指纹",
         ["AllowInsecure"] = "允许不安全连接", ["MuxEnabled"] = "启用 Mux", ["CoreType"] = "核心类型",
+        ["NowhereTransport"] = "Nowhere 传输", ["NowhereMorph"] = "Morph 混淆",
+        ["NowhereUploadMbps"] = "上传限速（Mbps，0 为不限）", ["NowhereDownloadMbps"] = "下载限速（Mbps，0 为不限）",
         ["Url"] = "地址", ["UserName"] = "用户名", ["User"] = "局域网用户名", ["Pass"] = "局域网密码",
         ["DirName"] = "目录名", ["Enabled"] = "启用", ["AutoUpdateInterval"] = "自动更新间隔（小时）",
         ["UserAgent"] = "User-Agent", ["LocalPort"] = "本地监听端口", ["SecondLocalPortEnabled"] = "启用第二本地端口",

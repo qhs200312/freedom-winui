@@ -103,8 +103,7 @@ public sealed class ServiceAvailabilityView : UserControl
     {
         if (!Enum.IsDefined(AppManager.Instance.RunningCoreType))
             throw new InvalidOperationException("请先启动内核，再测试当前代理路由。");
-        return new ServiceAvailabilityService(new System.Net.WebProxy(
-            $"socks5://127.0.0.1:{AppManager.Instance.GetLocalPort(EInboundProtocol.socks)}"));
+        return new ServiceAvailabilityService(ServiceLib.Handler.ConnectionHandler.GetLocalWebProxy());
     }
 
     public void Invalidate()

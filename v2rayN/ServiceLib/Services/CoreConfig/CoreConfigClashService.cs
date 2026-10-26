@@ -71,9 +71,6 @@ public class CoreConfigClashService(Config config)
             //log-level
             fileContent["log-level"] = GetLogLevel(config.CoreBasicItem.Loglevel);
 
-            //external-controller
-            fileContent["external-controller"] = $"{Global.Loopback}:{AppManager.Instance.StatePort2}";
-            fileContent.Remove("secret");
             //allow-lan
             if (config.Inbound.First().AllowLANConn)
             {
@@ -89,16 +86,10 @@ public class CoreConfigClashService(Config config)
             fileContent["ipv6"] = config.ClashUIItem.EnableIPv6;
 
             //mode
-            if (!fileContent.ContainsKey("mode"))
+            if (!fileContent.ContainsKey("mode") || config.ClashUIItem.RuleMode != ERuleMode.Unchanged)
             {
-                fileContent["mode"] = nameof(ERuleMode.Rule).ToLower();
-            }
-            else
-            {
-                if (config.ClashUIItem.RuleMode != ERuleMode.Unchanged)
-                {
-                    fileContent["mode"] = config.ClashUIItem.RuleMode.ToString().ToLower();
-                }
+                fileContent["mode"] = (config.ClashUIItem.RuleMode == ERuleMode.Unchanged
+                    ? ERuleMode.Rule : config.ClashUIItem.RuleMode).ToString().ToLowerInvariant();
             }
 
             //enable tun mode
@@ -124,6 +115,10 @@ public class CoreConfigClashService(Config config)
             {
                 Logging.SaveLog($"{_tag}-Mixin", ex);
             }
+
+            // Keep controller authentication consistent even when the profile or mixin sets it.
+            fileContent["external-controller"] = $"{Global.Loopback}:{AppManager.Instance.StatePort2}";
+            fileContent["secret"] = ClashApiManager.Instance.ApiSecret;
 
             var txtFileNew = YamlUtils.ToYaml(fileContent).Replace(tagYamlStr2, tagYamlStr3);
             await File.WriteAllTextAsync(fileName, txtFileNew);

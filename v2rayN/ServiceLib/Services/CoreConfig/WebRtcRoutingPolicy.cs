@@ -8,7 +8,7 @@ public static class WebRtcRoutingPolicy
     [
         "stun.l.google.com", "stun1.l.google.com", "stun2.l.google.com",
         "stun3.l.google.com", "stun4.l.google.com", "stun.cloudflare.com",
-        "global.stun.twilio.com", "stun.services.mozilla.com"
+        "global.stun.twilio.com"
     ];
 
     public static readonly string[] LocalNetworks =
